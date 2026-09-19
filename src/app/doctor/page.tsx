@@ -21,8 +21,9 @@ import {
   Pill, 
   Send, 
   Search,
-  Sparkles,
-  ExternalLink,
+  History,
+  X,
+  Calendar,
   Users,
   BarChart3
 } from 'lucide-react';
@@ -51,12 +52,39 @@ interface MedicineRow {
   instructions: string;
 }
 
+interface PastConsultation {
+  id: string;
+  created_at: string;
+  diagnosis: string;
+  symptoms: string;
+  vitals: {
+    bp?: string;
+    pulse?: string;
+    temp?: string;
+    weight?: string;
+  };
+  prescriptions: Array<{
+    id: string;
+    prescription_items: Array<{
+      medicine_name: string;
+      dosage: string;
+      frequency: string;
+      duration: string;
+    }>;
+  }>;
+}
+
 export default function DoctorWorkspacePage() {
   const [queue, setQueue] = useState<WaitingPatient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<WaitingPatient | null>(null);
   const [loading, setLoading] = useState(false);
   const [completedRxId, setCompletedRxId] = useState<string | null>(null);
   const [queueSearchQuery, setQueueSearchQuery] = useState('');
+
+  // Past History State
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [pastConsultations, setPastConsultations] = useState<PastConsultation[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Clinical Vitals State
   const [vitals, setVitals] = useState({
@@ -159,12 +187,42 @@ export default function DoctorWorkspacePage() {
     fetchQueue();
   };
 
+  // Step 21: Fetch Patient Medical History
+  const fetchPatientHistory = async () => {
+    if (!selectedPatient) return;
+    setHistoryLoading(true);
+    setShowHistoryModal(true);
+
+    const { data, error } = await supabase
+      .from('consultations')
+      .select(`
+        id,
+        created_at,
+        diagnosis,
+        symptoms,
+        vitals,
+        prescriptions (
+          id,
+          prescription_items (
+            medicine_name,
+            dosage,
+            frequency,
+            duration
+          )
+        )
+      `)
+      .eq('patient_id', selectedPatient.patient_id)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setPastConsultations(data as unknown as PastConsultation[]);
+    }
+    setHistoryLoading(false);
+  };
+
   const handleSubmitConsultation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPatient) {
-      alert('Please select a patient from the queue first.');
-      return;
-    }
+    if (!selectedPatient) return;
     if (!clinicalDiagnosis.trim()) {
       alert('Please enter a clinical diagnosis before finalizing.');
       return;
@@ -188,13 +246,8 @@ export default function DoctorWorkspacePage() {
         ])
         .select();
 
-      if (consultError) {
-        alert(`Consultation Error: ${consultError.message}`);
-        setLoading(false);
-        return;
-      }
-
-      const consultationId = consultData && consultData.length > 0 ? consultData[0].id : null;
+      if (consultError) throw consultError;
+      const consultationId = consultData[0].id;
 
       // 2. Insert Prescription Entry
       const { data: rxData, error: rxError } = await supabase
@@ -208,13 +261,8 @@ export default function DoctorWorkspacePage() {
         ])
         .select();
 
-      if (rxError) {
-        alert(`Prescription Error: ${rxError.message}`);
-        setLoading(false);
-        return;
-      }
-
-      const prescriptionId = rxData && rxData.length > 0 ? rxData[0].id : null;
+      if (rxError) throw rxError;
+      const prescriptionId = rxData[0].id;
 
       // 3. Insert Prescription Items
       const validMedicines = medicines.filter(m => m.name.trim() !== '');
@@ -237,10 +285,7 @@ export default function DoctorWorkspacePage() {
         .update({ status: 'Completed' })
         .eq('id', selectedPatient.id);
 
-      if (prescriptionId) {
-        setCompletedRxId(prescriptionId);
-      }
-
+      setCompletedRxId(prescriptionId);
       setClinicalDiagnosis('');
       setMedicines([{ name: '', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', instructions: 'After food' }]);
       fetchQueue();
@@ -252,7 +297,6 @@ export default function DoctorWorkspacePage() {
     }
   };
 
-  // Filter Queue based on Search Query
   const filteredQueue = queue.filter(item => 
     item.patients?.full_name.toLowerCase().includes(queueSearchQuery.toLowerCase()) ||
     item.patients?.phone.includes(queueSearchQuery) ||
@@ -261,7 +305,7 @@ export default function DoctorWorkspacePage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-16 font-sans">
-      {/* HEADER BAR WITH STEP 20 QUICK-LINKS */}
+      {/* HEADER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-stone-200/90 shadow-xs">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-[#0B4632] flex items-center justify-center text-white shadow-md">
@@ -273,14 +317,13 @@ export default function DoctorWorkspacePage() {
           </div>
         </div>
 
-        {/* QUICK NAVIGATION LINKS */}
         <div className="flex items-center gap-2">
           <Link
             href="/reception"
             className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
           >
             <Users className="w-3.5 h-3.5 text-[#0B4632]" />
-            <span>Reception Console</span>
+            <span>Reception</span>
           </Link>
 
           <Link
@@ -299,7 +342,7 @@ export default function DoctorWorkspacePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* LEFT COLUMN: WAITING QUEUE WITH PATIENT SEARCH BAR */}
+        {/* LEFT COLUMN: QUEUE LIST */}
         <div className="lg:col-span-4 space-y-4">
           <div className="bg-white rounded-3xl p-5 border border-stone-200/90 shadow-xs space-y-3">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
@@ -310,7 +353,6 @@ export default function DoctorWorkspacePage() {
               <span className="text-xs font-bold text-stone-400">{filteredQueue.length} Patients</span>
             </div>
 
-            {/* QUEUE SEARCH BAR */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -376,10 +418,9 @@ export default function DoctorWorkspacePage() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: CLINICAL CONSULTATION & RX BUILDER */}
+        {/* RIGHT COLUMN: CONSULTATION WORKSPACE */}
         <div className="lg:col-span-8 space-y-6">
           {completedRxId ? (
-            /* SUCCESS CONFIRMATION BANNER WITH PRINT LINK */
             <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-8 text-center space-y-4">
               <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
                 <CheckCircle2 className="w-7 h-7" />
@@ -412,9 +453,9 @@ export default function DoctorWorkspacePage() {
             </div>
           ) : selectedPatient ? (
             <form onSubmit={handleSubmitConsultation} className="space-y-6">
-              {/* PATIENT CHART CARD */}
+              {/* PATIENT CHART CARD WITH STEP 21 HISTORY BUTTON */}
               <div className="bg-white rounded-3xl p-6 border border-stone-200/90 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-mono font-bold text-lg">
                       #{String(selectedPatient.token_number).padStart(2, '0')}
@@ -427,9 +468,20 @@ export default function DoctorWorkspacePage() {
                     </div>
                   </div>
 
-                  <span className="px-3 py-1 bg-amber-50 text-amber-800 text-xs font-bold rounded-full border border-amber-200">
-                    Allergies: {selectedPatient.patients?.allergies || 'None'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={fetchPatientHistory}
+                      className="px-3.5 py-1.5 bg-[#0B4632] hover:bg-emerald-900 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <History className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Medical History</span>
+                    </button>
+
+                    <span className="px-3 py-1 bg-amber-50 text-amber-800 text-xs font-bold rounded-full border border-amber-200">
+                      Allergies: {selectedPatient.patients?.allergies || 'None'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* CLINICAL VITALS STRIP */}
@@ -556,7 +608,7 @@ export default function DoctorWorkspacePage() {
                         <div className="sm:col-span-4">
                           <input
                             type="text"
-                            placeholder="Medicine Name (e.g. Tab Paracetamol)"
+                            placeholder="Medicine Name"
                             value={med.name}
                             onChange={(e) => {
                               const updated = [...medicines];
@@ -584,7 +636,7 @@ export default function DoctorWorkspacePage() {
                         <div className="sm:col-span-2">
                           <input
                             type="text"
-                            placeholder="Frequency (1-0-1)"
+                            placeholder="Frequency"
                             value={med.frequency}
                             onChange={(e) => {
                               const updated = [...medicines];
@@ -657,6 +709,76 @@ export default function DoctorWorkspacePage() {
           ) : null}
         </div>
       </div>
+
+      {/* STEP 21: PAST MEDICAL HISTORY MODAL */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+            <div className="p-5 bg-[#0B4632] text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="w-5 h-5 text-amber-300" />
+                <h3 className="font-bold text-sm">
+                  Medical History: {selectedPatient?.patients?.full_name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="p-1 hover:bg-emerald-900 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              {historyLoading ? (
+                <div className="py-12 text-center text-xs font-bold text-stone-500 animate-pulse">
+                  Loading patient consultations history...
+                </div>
+              ) : pastConsultations.length === 0 ? (
+                <div className="py-12 text-center space-y-2 text-stone-400">
+                  <Calendar className="w-8 h-8 mx-auto" />
+                  <p className="text-xs font-bold">No past consultations found for this patient.</p>
+                </div>
+              ) : (
+                pastConsultations.map((item) => (
+                  <div key={item.id} className="p-4 rounded-2xl bg-[#F6F4EE] border border-stone-200 space-y-3">
+                    <div className="flex items-center justify-between text-xs border-b border-stone-200 pb-2">
+                      <span className="font-bold text-[#0B4632]">
+                        {new Date(item.created_at).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </span>
+                      <span className="text-stone-500 font-medium">
+                        BP: {item.vitals?.bp || 'N/A'} • Temp: {item.vitals?.temp || 'N/A'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase text-amber-700 block">Diagnosis</span>
+                      <p className="text-xs font-bold text-stone-900">{item.diagnosis}</p>
+                    </div>
+
+                    {item.prescriptions?.length > 0 && item.prescriptions[0].prescription_items?.length > 0 && (
+                      <div className="space-y-1 pt-1 border-t border-stone-200/60">
+                        <span className="text-[10px] font-bold uppercase text-stone-500 block">Prescribed Medicines</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.prescriptions[0].prescription_items.map((m, idx) => (
+                            <span key={idx} className="px-2 py-0.5 bg-white text-stone-800 text-[10px] font-semibold rounded-md border border-stone-200">
+                              {m.medicine_name} ({m.dosage} - {m.frequency})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
