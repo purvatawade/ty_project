@@ -25,7 +25,8 @@ import {
   X,
   Calendar,
   Users,
-  BarChart3
+  BarChart3,
+  ShieldAlert
 } from 'lucide-react';
 
 interface WaitingPatient {
@@ -187,7 +188,6 @@ export default function DoctorWorkspacePage() {
     fetchQueue();
   };
 
-  // Step 21: Fetch Patient Medical History
   const fetchPatientHistory = async () => {
     if (!selectedPatient) return;
     setHistoryLoading(true);
@@ -231,7 +231,6 @@ export default function DoctorWorkspacePage() {
     setLoading(true);
 
     try {
-      // 1. Insert Consultation Entry
       const { data: consultData, error: consultError } = await supabase
         .from('consultations')
         .insert([
@@ -249,7 +248,6 @@ export default function DoctorWorkspacePage() {
       if (consultError) throw consultError;
       const consultationId = consultData[0].id;
 
-      // 2. Insert Prescription Entry
       const { data: rxData, error: rxError } = await supabase
         .from('prescriptions')
         .insert([
@@ -264,7 +262,6 @@ export default function DoctorWorkspacePage() {
       if (rxError) throw rxError;
       const prescriptionId = rxData[0].id;
 
-      // 3. Insert Prescription Items
       const validMedicines = medicines.filter(m => m.name.trim() !== '');
       if (validMedicines.length > 0 && prescriptionId) {
         const itemsToInsert = validMedicines.map(m => ({
@@ -279,7 +276,6 @@ export default function DoctorWorkspacePage() {
         await supabase.from('prescription_items').insert(itemsToInsert);
       }
 
-      // 4. Update Appointment Status to Completed
       await supabase
         .from('appointments')
         .update({ status: 'Completed' })
@@ -302,6 +298,10 @@ export default function DoctorWorkspacePage() {
     item.patients?.phone.includes(queueSearchQuery) ||
     String(item.token_number).includes(queueSearchQuery)
   );
+
+  // Vitals Health Check Logic
+  const isHighBP = vitals.bp.startsWith('140') || vitals.bp.startsWith('150') || vitals.bp.startsWith('160');
+  const isHighTemp = vitals.temp.startsWith('100') || vitals.temp.startsWith('101') || vitals.temp.startsWith('102');
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-16 font-sans">
@@ -453,7 +453,7 @@ export default function DoctorWorkspacePage() {
             </div>
           ) : selectedPatient ? (
             <form onSubmit={handleSubmitConsultation} className="space-y-6">
-              {/* PATIENT CHART CARD WITH STEP 21 HISTORY BUTTON */}
+              {/* PATIENT CHART CARD */}
               <div className="bg-white rounded-3xl p-6 border border-stone-200/90 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
                   <div className="flex items-center gap-3">
@@ -484,54 +484,96 @@ export default function DoctorWorkspacePage() {
                   </div>
                 </div>
 
-                {/* CLINICAL VITALS STRIP */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
-                      <HeartPulse className="w-3.5 h-3.5 text-rose-600" /> Blood Pressure
+                {/* STEP 22: VITALS QUICK PRESETS & ALERT BADGES */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
+                      Clinical Vitals & Measurements
                     </span>
-                    <input
-                      type="text"
-                      value={vitals.bp}
-                      onChange={(e) => setVitals({ ...vitals, bp: e.target.value })}
-                      className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
-                    />
+
+                    {(isHighBP || isHighTemp) && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-bold animate-pulse">
+                        <ShieldAlert className="w-3 h-3 text-rose-600" />
+                        Abnormal Vitals Detected
+                      </span>
+                    )}
                   </div>
 
-                  <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
-                      <Activity className="w-3.5 h-3.5 text-emerald-700" /> Pulse Rate
-                    </span>
-                    <input
-                      type="text"
-                      value={vitals.pulse}
-                      onChange={(e) => setVitals({ ...vitals, pulse: e.target.value })}
-                      className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
-                    />
+                  {/* Vitals Input Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
+                      <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
+                        <HeartPulse className="w-3.5 h-3.5 text-rose-600" /> Blood Pressure
+                      </span>
+                      <input
+                        type="text"
+                        value={vitals.bp}
+                        onChange={(e) => setVitals({ ...vitals, bp: e.target.value })}
+                        className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
+                      <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
+                        <Activity className="w-3.5 h-3.5 text-emerald-700" /> Pulse Rate
+                      </span>
+                      <input
+                        type="text"
+                        value={vitals.pulse}
+                        onChange={(e) => setVitals({ ...vitals, pulse: e.target.value })}
+                        className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
+                      <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
+                        <Thermometer className="w-3.5 h-3.5 text-amber-600" /> Temperature
+                      </span>
+                      <input
+                        type="text"
+                        value={vitals.temp}
+                        onChange={(e) => setVitals({ ...vitals, temp: e.target.value })}
+                        className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
+                      <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
+                        <Weight className="w-3.5 h-3.5 text-indigo-600" /> Body Weight
+                      </span>
+                      <input
+                        type="text"
+                        value={vitals.weight}
+                        onChange={(e) => setVitals({ ...vitals, weight: e.target.value })}
+                        className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
+                      />
+                    </div>
                   </div>
 
-                  <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
-                      <Thermometer className="w-3.5 h-3.5 text-amber-600" /> Temperature
-                    </span>
-                    <input
-                      type="text"
-                      value={vitals.temp}
-                      onChange={(e) => setVitals({ ...vitals, temp: e.target.value })}
-                      className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
-                      <Weight className="w-3.5 h-3.5 text-indigo-600" /> Body Weight
-                    </span>
-                    <input
-                      type="text"
-                      value={vitals.weight}
-                      onChange={(e) => setVitals({ ...vitals, weight: e.target.value })}
-                      className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
-                    />
+                  {/* Vitals Quick Tap Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] font-bold text-stone-400 uppercase mr-1">Vitals Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => setVitals({ bp: '120/80', pulse: '72 bpm', temp: '98.6 °F', weight: vitals.weight })}
+                      className="px-2 py-0.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-semibold rounded-md border border-stone-200 cursor-pointer"
+                    >
+                      Normal (120/80)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVitals({ bp: '150/95', pulse: '88 bpm', temp: '98.6 °F', weight: vitals.weight })}
+                      className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-semibold rounded-md border border-amber-200 cursor-pointer"
+                    >
+                      Hypertensive (150/95)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVitals({ bp: '110/70', pulse: '104 bpm', temp: '101.4 °F', weight: vitals.weight })}
+                      className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-800 text-[10px] font-semibold rounded-md border border-rose-200 cursor-pointer"
+                    >
+                      Febrile Rush (101.4 °F)
+                    </button>
                   </div>
                 </div>
 
@@ -710,7 +752,7 @@ export default function DoctorWorkspacePage() {
         </div>
       </div>
 
-      {/* STEP 21: PAST MEDICAL HISTORY MODAL */}
+      {/* PAST MEDICAL HISTORY MODAL */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
