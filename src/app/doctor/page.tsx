@@ -22,7 +22,9 @@ import {
   Send, 
   Search,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Users,
+  BarChart3
 } from 'lucide-react';
 
 interface WaitingPatient {
@@ -54,6 +56,7 @@ export default function DoctorWorkspacePage() {
   const [selectedPatient, setSelectedPatient] = useState<WaitingPatient | null>(null);
   const [loading, setLoading] = useState(false);
   const [completedRxId, setCompletedRxId] = useState<string | null>(null);
+  const [queueSearchQuery, setQueueSearchQuery] = useState('');
 
   // Clinical Vitals State
   const [vitals, setVitals] = useState({
@@ -186,7 +189,6 @@ export default function DoctorWorkspacePage() {
         .select();
 
       if (consultError) {
-        console.error('Consultation Insert Error:', consultError);
         alert(`Consultation Error: ${consultError.message}`);
         setLoading(false);
         return;
@@ -207,7 +209,6 @@ export default function DoctorWorkspacePage() {
         .select();
 
       if (rxError) {
-        console.error('Prescription Insert Error:', rxError);
         alert(`Prescription Error: ${rxError.message}`);
         setLoading(false);
         return;
@@ -227,13 +228,7 @@ export default function DoctorWorkspacePage() {
           instructions: m.instructions
         }));
 
-        const { error: itemsError } = await supabase
-          .from('prescription_items')
-          .insert(itemsToInsert);
-
-        if (itemsError) {
-          console.error('Prescription Items Error:', itemsError);
-        }
+        await supabase.from('prescription_items').insert(itemsToInsert);
       }
 
       // 4. Update Appointment Status to Completed
@@ -244,8 +239,6 @@ export default function DoctorWorkspacePage() {
 
       if (prescriptionId) {
         setCompletedRxId(prescriptionId);
-      } else {
-        alert('Prescription created, but could not retrieve Prescription ID.');
       }
 
       setClinicalDiagnosis('');
@@ -259,9 +252,16 @@ export default function DoctorWorkspacePage() {
     }
   };
 
+  // Filter Queue based on Search Query
+  const filteredQueue = queue.filter(item => 
+    item.patients?.full_name.toLowerCase().includes(queueSearchQuery.toLowerCase()) ||
+    item.patients?.phone.includes(queueSearchQuery) ||
+    String(item.token_number).includes(queueSearchQuery)
+  );
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16">
-      {/* HEADER BAR */}
+    <div className="max-w-7xl mx-auto space-y-6 pb-16 font-sans">
+      {/* HEADER BAR WITH STEP 20 QUICK-LINKS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-stone-200/90 shadow-xs">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-[#0B4632] flex items-center justify-center text-white shadow-md">
@@ -273,34 +273,63 @@ export default function DoctorWorkspacePage() {
           </div>
         </div>
 
+        {/* QUICK NAVIGATION LINKS */}
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
+          <Link
+            href="/reception"
+            className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+          >
+            <Users className="w-3.5 h-3.5 text-[#0B4632]" />
+            <span>Reception Console</span>
+          </Link>
+
+          <Link
+            href="/analytics"
+            className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-[#0B4632]" />
+            <span>Analytics</span>
+          </Link>
+
+          <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-            Live Queue Active ({queue.length} Waiting)
+            Live Queue ({queue.length})
           </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* LEFT COLUMN: ACTIVE WAITING QUEUE */}
+        {/* LEFT COLUMN: WAITING QUEUE WITH PATIENT SEARCH BAR */}
         <div className="lg:col-span-4 space-y-4">
           <div className="bg-white rounded-3xl p-5 border border-stone-200/90 shadow-xs space-y-3">
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
                 <Clock className="w-4 h-4 text-[#0B4632]" />
-                Checked-In Waiting Queue
+                Checked-In Queue
               </span>
-              <span className="text-xs font-bold text-stone-400">{queue.length} Patients</span>
+              <span className="text-xs font-bold text-stone-400">{filteredQueue.length} Patients</span>
             </div>
 
-            {queue.length === 0 ? (
+            {/* QUEUE SEARCH BAR */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search patient name or phone..."
+                value={queueSearchQuery}
+                onChange={(e) => setQueueSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:border-[#0B4632]"
+              />
+            </div>
+
+            {filteredQueue.length === 0 ? (
               <div className="p-8 text-center text-stone-400 space-y-2">
                 <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-600 opacity-60" />
-                <p className="text-xs font-semibold">No patients currently in waiting room.</p>
+                <p className="text-xs font-semibold">No matching patients in queue.</p>
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-                {queue.map((item) => {
+              <div className="space-y-2.5 max-h-[550px] overflow-y-auto pr-1">
+                {filteredQueue.map((item) => {
                   const isSelected = selectedPatient?.id === item.id;
                   return (
                     <button

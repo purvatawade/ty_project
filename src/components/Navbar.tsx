@@ -20,6 +20,7 @@ export default function Navbar() {
     { href: '/reception', label: 'Reception Console', icon: Users },
     { href: '/doctor', label: 'Doctor Desk', icon: Stethoscope },
     { href: '/analytics', label: 'OPD Analytics', icon: BarChart3 },
+    { href: '/appointments', label: 'Appointments', icon: Calendar },
   ];
 
   return (
