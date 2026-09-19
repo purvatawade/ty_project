@@ -5,40 +5,32 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { 
   Users, 
-  Clock, 
-  CheckCircle2, 
-  AlertTriangle, 
-  RefreshCw, 
   Search, 
-  UserPlus, 
-  Activity, 
-  ShieldAlert
+  CheckCircle2, 
+  Stethoscope, 
+  BarChart3, 
+  UserCheck
 } from 'lucide-react';
 
-interface QueueAppointment {
+interface PatientQueueItem {
   id: string;
   token_number: number;
   urgency_level: 'Normal' | 'Priority' | 'Emergency';
-  status: 'Pending' | 'Checked-In' | 'In-Consultation' | 'Completed' | 'Cancelled';
-  symptoms?: string;
-  appointment_date: string;
+  status: 'Pending' | 'Checked-In' | 'In-Consultation' | 'Completed';
   patients: {
-    id: string;
     full_name: string;
     phone: string;
     gender: string;
-    allergies?: string;
+    date_of_birth: string;
   };
 }
 
 export default function ReceptionConsolePage() {
-  const [appointments, setAppointments] = useState<QueueAppointment[]>([]);
+  const [queue, setQueue] = useState<PatientQueueItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [filterUrgency, setFilterUrgency] = useState<string>('ALL');
 
-  // Fetch today's queue
-  const fetchTodayQueue = async () => {
+  const fetchQueue = async () => {
     setLoading(true);
     const today = new Date().toISOString().split('T')[0];
 
@@ -49,19 +41,18 @@ export default function ReceptionConsolePage() {
       .order('token_number', { ascending: true });
 
     if (!error && data) {
-      setAppointments(data as unknown as QueueAppointment[]);
+      setQueue(data as unknown as PatientQueueItem[]);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchTodayQueue();
+    fetchQueue();
 
-    // Realtime subscription for reception queue
     const channel = supabase
-      .channel('reception_realtime_queue')
+      .channel('reception_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
-        fetchTodayQueue();
+        fetchQueue();
       })
       .subscribe();
 
@@ -70,224 +61,151 @@ export default function ReceptionConsolePage() {
     };
   }, []);
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
     await supabase
       .from('appointments')
       .update({ status: newStatus })
       .eq('id', id);
 
-    fetchTodayQueue();
+    fetchQueue();
   };
 
-  // Step 17 Analytics Metrics Calculations
-  const totalBooked = appointments.length;
-  const pendingArrival = appointments.filter(a => a.status === 'Pending').length;
-  const waitingRoom = appointments.filter(a => a.status === 'Checked-In' || a.status === 'In-Consultation').length;
-  const completedCount = appointments.filter(a => a.status === 'Completed').length;
-  const emergencyCount = appointments.filter(a => a.urgency_level === 'Emergency' && a.status !== 'Completed').length;
-
-  // Filtered Queue List
-  const filteredAppointments = appointments.filter(app => {
-    const matchesSearch = 
-      app.patients?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.patients?.phone.includes(searchQuery) ||
-      String(app.token_number).includes(searchQuery);
-
-    const matchesUrgency = filterUrgency === 'ALL' || app.urgency_level === filterUrgency;
-
-    return matchesSearch && matchesUrgency;
-  });
+  const filteredQueue = queue.filter(item =>
+    item.patients?.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.patients?.phone.includes(searchQuery) ||
+    String(item.token_number).includes(searchQuery)
+  );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16">
-      {/* HEADER STRIP */}
+    <div className="max-w-7xl mx-auto space-y-6 pb-16 font-sans">
+      
+      {/* HEADER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-stone-200/90 shadow-xs">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-[#0B4632] flex items-center justify-center text-white shadow-md">
             <Users className="w-6 h-6 text-emerald-200" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-stone-900">Reception Triage & Queue Console</h1>
-            <p className="text-xs text-stone-500">Dhanwantri Clinic • Live Outpatient Management</p>
+            <h1 className="text-xl font-bold text-stone-900">Reception Desk & Queue Control</h1>
+            <p className="text-xs text-stone-500">Dhanwantri Clinic • Live Walk-in Management</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchTodayQueue}
-            className="p-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl transition cursor-pointer"
-            title="Refresh Queue"
+        <div className="flex items-center gap-2">
+          <Link
+            href="/doctor"
+            className="px-3.5 py-2 bg-[#0B4632] hover:bg-emerald-900 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#0B4632]' : ''}`} />
-          </button>
+            <Stethoscope className="w-3.5 h-3.5 text-amber-300" />
+            <span>Doctor Workspace</span>
+          </Link>
 
           <Link
-            href="/"
-            className="px-4 py-2.5 bg-[#0B4632] hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5"
+            href="/analytics"
+            className="px-3.5 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
           >
-            <UserPlus className="w-4 h-4 text-emerald-300" />
-            <span>Add Walk-In</span>
+            <BarChart3 className="w-3.5 h-3.5 text-[#0B4632]" />
+            <span>Analytics</span>
           </Link>
         </div>
       </div>
 
-      {/* STEP 17: RECEPTION ANALYTICS & RUSH METRICS STRIP */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
-        <div className="bg-white p-4 rounded-2xl border border-stone-200/90 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold uppercase text-stone-400 tracking-wider block">Total Booked</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-stone-900">{totalBooked}</span>
-            <Users className="w-4 h-4 text-stone-400" />
+      {/* QUEUE CONTROL TABLE */}
+      <div className="bg-white rounded-3xl p-6 border border-stone-200/90 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search token #, patient name, or mobile..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs font-bold text-stone-900 focus:outline-none focus:border-[#0B4632]"
+            />
           </div>
+
+          <span className="text-xs font-bold text-stone-500">
+            Total Queue: <strong className="text-stone-900">{queue.length} Patients</strong>
+          </span>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-amber-200/90 shadow-xs space-y-1 bg-amber-50/20">
-          <span className="text-[10px] font-bold uppercase text-amber-600 tracking-wider block">Pending Arrival</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-amber-700">{pendingArrival}</span>
-            <Clock className="w-4 h-4 text-amber-500" />
+        {loading ? (
+          <div className="py-12 text-center text-xs font-bold text-stone-500 animate-pulse">
+            Syncing Live OPD Queue...
           </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-emerald-200/90 shadow-xs space-y-1 bg-emerald-50/20">
-          <span className="text-[10px] font-bold uppercase text-emerald-700 tracking-wider block">Checked-In (Waiting)</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-emerald-800">{waitingRoom}</span>
-            <Activity className="w-4 h-4 text-emerald-600" />
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-stone-200/90 shadow-xs space-y-1">
-          <span className="text-[10px] font-bold uppercase text-stone-400 tracking-wider block">Completed</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-stone-900">{completedCount}</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-rose-200/90 shadow-xs space-y-1 bg-rose-50/20 col-span-2 lg:col-span-1">
-          <span className="text-[10px] font-bold uppercase text-rose-600 tracking-wider block">Emergency Rush</span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-rose-700">{emergencyCount}</span>
-            <ShieldAlert className="w-4 h-4 text-rose-600 animate-pulse" />
-          </div>
-        </div>
-      </div>
-
-      {/* FILTER & SEARCH BAR */}
-      <div className="bg-white p-4 rounded-2xl border border-stone-200/90 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-96">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Filter today's queue by patient name, phone, or token..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:border-[#0B4632]"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-          <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider shrink-0">Filter Urgency:</span>
-          {['ALL', 'Normal', 'Priority', 'Emergency'].map((urgency) => (
-            <button
-              key={urgency}
-              onClick={() => setFilterUrgency(urgency)}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition cursor-pointer shrink-0 ${
-                filterUrgency === urgency
-                  ? 'bg-[#0B4632] text-white shadow-xs'
-                  : 'bg-[#F6F4EE] text-stone-600 hover:bg-stone-200'
-              }`}
-            >
-              {urgency}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* QUEUE CARDS LIST */}
-      <div className="space-y-3">
-        {filteredAppointments.length === 0 ? (
-          <div className="bg-white p-12 rounded-3xl border border-stone-200 text-center space-y-2">
-            <Users className="w-8 h-8 text-stone-300 mx-auto" />
-            <p className="text-xs font-bold text-stone-500">No matching tokens found in today's OPD queue.</p>
+        ) : filteredQueue.length === 0 ? (
+          <div className="py-12 text-center text-stone-400 space-y-2">
+            <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-600 opacity-50" />
+            <p className="text-xs font-semibold">No patients found in today's queue.</p>
           </div>
         ) : (
-          filteredAppointments.map((app) => (
-            <div
-              key={app.id}
-              className={`bg-white p-5 rounded-2xl border transition-all shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                app.urgency_level === 'Emergency'
-                  ? 'border-rose-300 bg-rose-50/10'
-                  : app.status === 'Checked-In'
-                  ? 'border-emerald-300 bg-emerald-50/10'
-                  : 'border-stone-200'
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-mono font-black text-lg ${
-                  app.urgency_level === 'Emergency'
-                    ? 'bg-rose-600 text-white shadow-md'
-                    : app.urgency_level === 'Priority'
-                    ? 'bg-amber-500 text-white shadow-xs'
-                    : 'bg-[#0B4632] text-white'
-                }`}>
-                  #{String(app.token_number).padStart(2, '0')}
-                </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-stone-200 text-[11px] font-bold uppercase text-stone-500">
+                  <th className="py-3 px-2">Token #</th>
+                  <th className="py-3 px-2">Patient Details</th>
+                  <th className="py-3 px-2">Urgency</th>
+                  <th className="py-3 px-2">Status</th>
+                  <th className="py-3 px-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100 text-xs">
+                {filteredQueue.map((item) => (
+                  <tr key={item.id} className="hover:bg-stone-50/80 transition">
+                    <td className="py-3 px-2 font-black text-base text-[#0B4632] font-mono">
+                      #{String(item.token_number).padStart(2, '0')}
+                    </td>
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-stone-900">{app.patients?.full_name}</h3>
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                      app.urgency_level === 'Emergency'
-                        ? 'bg-rose-100 text-rose-800 border-rose-300'
-                        : app.urgency_level === 'Priority'
-                        ? 'bg-amber-100 text-amber-800 border-amber-300'
-                        : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                    }`}>
-                      {app.urgency_level}
-                    </span>
-                  </div>
+                    <td className="py-3 px-2 space-y-0.5">
+                      <p className="font-bold text-stone-900">{item.patients?.full_name}</p>
+                      <p className="text-[11px] text-stone-500">
+                        {item.patients?.gender} • Ph: {item.patients?.phone}
+                      </p>
+                    </td>
 
-                  <div className="text-xs text-stone-500 flex flex-wrap items-center gap-3">
-                    <span>Phone: {app.patients?.phone}</span>
-                    <span>•</span>
-                    <span>Gender: {app.patients?.gender}</span>
-                    {app.patients?.allergies && (
-                      <>
-                        <span>•</span>
-                        <span className="font-bold text-rose-700">Allergies: {app.patients.allergies}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
+                    <td className="py-3 px-2">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase ${
+                        item.urgency_level === 'Emergency'
+                          ? 'bg-rose-100 text-rose-800 border-rose-300'
+                          : item.urgency_level === 'Priority'
+                          ? 'bg-amber-100 text-amber-800 border-amber-300'
+                          : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      }`}>
+                        {item.urgency_level}
+                      </span>
+                    </td>
 
-              {/* STATUS ACTION TOGGLES */}
-              <div className="flex items-center gap-3 border-t sm:border-t-0 pt-3 sm:pt-0 border-stone-100">
-                <select
-                  value={app.status}
-                  onChange={(e) => handleStatusChange(app.id, e.target.value)}
-                  className="px-3 py-2 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs font-bold text-stone-800 focus:outline-none cursor-pointer"
-                >
-                  <option value="Pending">Pending Arrival</option>
-                  <option value="Checked-In">Checked-In (Waiting)</option>
-                  <option value="In-Consultation">In-Consultation</option>
-                  <option value="Completed">Consultation Done</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
+                    <td className="py-3 px-2 font-bold">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] ${
+                        item.status === 'Completed'
+                          ? 'bg-stone-100 text-stone-700'
+                          : item.status === 'In-Consultation'
+                          ? 'bg-amber-50 text-amber-800 border border-amber-200 animate-pulse'
+                          : item.status === 'Checked-In'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-stone-100 text-stone-600'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </td>
 
-                {app.status === 'Pending' && (
-                  <button
-                    onClick={() => handleStatusChange(app.id, 'Checked-In')}
-                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl transition cursor-pointer"
-                  >
-                    Check-In Patient
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
+                    <td className="py-3 px-2 text-right">
+                      {item.status === 'Pending' && (
+                        <button
+                          onClick={() => handleUpdateStatus(item.id, 'Checked-In')}
+                          className="px-3.5 py-1.5 bg-[#0B4632] hover:bg-emerald-900 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs ml-auto"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-300" />
+                          <span>Check-In Patient</span>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

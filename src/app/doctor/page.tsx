@@ -3,17 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import UpiPaymentModal from '@/components/UpiPaymentModal';
 import { 
   Stethoscope, 
-  User, 
   Clock, 
-  AlertTriangle, 
-  Flame, 
-  Leaf, 
-  Activity, 
-  HeartPulse, 
-  Thermometer, 
-  Weight, 
   Plus, 
   Trash2, 
   CheckCircle2, 
@@ -26,7 +19,9 @@ import {
   Calendar,
   Users,
   BarChart3,
-  ShieldAlert
+  Mic,
+  MicOff,
+  QrCode
 } from 'lucide-react';
 
 interface WaitingPatient {
@@ -58,12 +53,6 @@ interface PastConsultation {
   created_at: string;
   diagnosis: string;
   symptoms: string;
-  vitals: {
-    bp?: string;
-    pulse?: string;
-    temp?: string;
-    weight?: string;
-  };
   prescriptions: Array<{
     id: string;
     prescription_items: Array<{
@@ -80,22 +69,21 @@ export default function DoctorWorkspacePage() {
   const [selectedPatient, setSelectedPatient] = useState<WaitingPatient | null>(null);
   const [loading, setLoading] = useState(false);
   const [completedRxId, setCompletedRxId] = useState<string | null>(null);
+  const [completedPatientName, setCompletedPatientName] = useState<string>('');
+  const [completedTokenNumber, setCompletedTokenNumber] = useState<number>(0);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [queueSearchQuery, setQueueSearchQuery] = useState('');
+
+  // Voice Scribe State
+  const [isListeningSymptoms, setIsListeningSymptoms] = useState(false);
+  const [isListeningDiagnosis, setIsListeningDiagnosis] = useState(false);
 
   // Past History State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [pastConsultations, setPastConsultations] = useState<PastConsultation[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Clinical Vitals State
-  const [vitals, setVitals] = useState({
-    bp: '120/80',
-    pulse: '72 bpm',
-    temp: '98.6 °F',
-    weight: '65 kg',
-  });
-
-  // Clinical Diagnosis
+  // Clinical Diagnosis & Symptoms
   const [clinicalDiagnosis, setClinicalDiagnosis] = useState('');
   const [clinicalSymptoms, setClinicalSymptoms] = useState('');
 
@@ -104,7 +92,6 @@ export default function DoctorWorkspacePage() {
     { name: 'Tab Paracetamol 650mg', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', instructions: 'After food' }
   ]);
 
-  // Quick Prescription Preset Chips
   const quickChips = [
     { name: 'Tab Paracetamol 650mg', dosage: '1 Tab', frequency: '1-1-1', duration: '3 Days', instructions: 'After food for fever' },
     { name: 'Cap Pantoprazole 40mg', dosage: '1 Cap', frequency: '1-0-0', duration: '7 Days', instructions: '30 mins before breakfast' },
@@ -112,7 +99,54 @@ export default function DoctorWorkspacePage() {
     { name: 'Tab Amoxicillin 500mg', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', instructions: 'After food' }
   ];
 
-  // Fetch Checked-In Queue
+  const getPatientAge = (dobString?: string) => {
+    if (!dobString) return 'N/A';
+    const birthYear = new Date(dobString).getFullYear();
+    const currentYear = new Date().getFullYear();
+    const calculatedAge = currentYear - birthYear;
+    return isNaN(calculatedAge) || calculatedAge <= 0 ? 'N/A' : `${calculatedAge} Yrs`;
+  };
+
+  const toggleVoiceScribe = (target: 'symptoms' | 'diagnosis') => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Voice dictation is not supported on this browser. Please use Google Chrome or Microsoft Edge.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-IN';
+
+    if (target === 'symptoms') {
+      setIsListeningSymptoms(true);
+      recognition.start();
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setClinicalSymptoms((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        setIsListeningSymptoms(false);
+      };
+
+      recognition.onerror = () => setIsListeningSymptoms(false);
+      recognition.onend = () => setIsListeningSymptoms(false);
+    } else {
+      setIsListeningDiagnosis(true);
+      recognition.start();
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setClinicalDiagnosis((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        setIsListeningDiagnosis(false);
+      };
+
+      recognition.onerror = () => setIsListeningDiagnosis(false);
+      recognition.onend = () => setIsListeningDiagnosis(false);
+    }
+  };
+
   const fetchQueue = async () => {
     const today = new Date().toISOString().split('T')[0];
     const { data, error } = await supabase
@@ -155,7 +189,7 @@ export default function DoctorWorkspacePage() {
 
   useEffect(() => {
     if (selectedPatient) {
-      setClinicalSymptoms(selectedPatient.symptoms || 'General Malaise / Regular Checkup');
+      setClinicalSymptoms(selectedPatient.symptoms || '');
     }
   }, [selectedPatient]);
 
@@ -200,7 +234,6 @@ export default function DoctorWorkspacePage() {
         created_at,
         diagnosis,
         symptoms,
-        vitals,
         prescriptions (
           id,
           prescription_items (
@@ -237,9 +270,8 @@ export default function DoctorWorkspacePage() {
           {
             appointment_id: selectedPatient.id,
             patient_id: selectedPatient.patient_id,
-            symptoms: clinicalSymptoms,
+            symptoms: clinicalSymptoms || 'General Consultation',
             diagnosis: clinicalDiagnosis.trim(),
-            vitals: vitals,
             notes: 'Completed in Dhanwantri Doctor Desk'
           }
         ])
@@ -282,7 +314,10 @@ export default function DoctorWorkspacePage() {
         .eq('id', selectedPatient.id);
 
       setCompletedRxId(prescriptionId);
+      setCompletedPatientName(selectedPatient.patients?.full_name || 'Patient');
+      setCompletedTokenNumber(selectedPatient.token_number);
       setClinicalDiagnosis('');
+      setClinicalSymptoms('');
       setMedicines([{ name: '', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', instructions: 'After food' }]);
       fetchQueue();
 
@@ -298,10 +333,6 @@ export default function DoctorWorkspacePage() {
     item.patients?.phone.includes(queueSearchQuery) ||
     String(item.token_number).includes(queueSearchQuery)
   );
-
-  // Vitals Health Check Logic
-  const isHighBP = vitals.bp.startsWith('140') || vitals.bp.startsWith('150') || vitals.bp.startsWith('160');
-  const isHighTemp = vitals.temp.startsWith('100') || vitals.temp.startsWith('101') || vitals.temp.startsWith('102');
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-16 font-sans">
@@ -395,7 +426,7 @@ export default function DoctorWorkspacePage() {
                         <div className="text-[11px] text-stone-500 flex items-center gap-2">
                           <span>{item.patients?.gender}</span>
                           <span>•</span>
-                          <span>Phone: {item.patients?.phone}</span>
+                          <span>Age: {getPatientAge(item.patients?.date_of_birth)}</span>
                         </div>
                       </div>
 
@@ -421,31 +452,45 @@ export default function DoctorWorkspacePage() {
         {/* RIGHT COLUMN: CONSULTATION WORKSPACE */}
         <div className="lg:col-span-8 space-y-6">
           {completedRxId ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-8 text-center space-y-4">
-              <div className="w-12 h-12 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto shadow-md">
-                <CheckCircle2 className="w-7 h-7" />
+            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-8 text-center space-y-5">
+              <div className="w-14 h-14 bg-emerald-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
+                <CheckCircle2 className="w-8 h-8 text-emerald-200" />
               </div>
-              <h2 className="text-xl font-bold text-emerald-950">Consultation Completed & Saved!</h2>
-              <p className="text-xs text-emerald-800 max-w-md mx-auto">
-                Patient record and digital prescription have been saved to Supabase cloud records.
-              </p>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold text-emerald-950">Consultation Completed!</h2>
+                <p className="text-xs text-emerald-800 max-w-md mx-auto">
+                  Prescription generated for <strong className="text-stone-900">{completedPatientName}</strong>. You can now collect payment or view the prescription slip.
+                </p>
+              </div>
+
+              {/* PAYMENT & PRESCRIPTION BUTTONS */}
               <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>Show UPI QR Code (₹100 Fee)</span>
+                </button>
+
                 <a
                   href={`/prescription/${completedRxId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-5 py-2.5 bg-[#D97706] hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  className="px-5 py-2.5 bg-[#0B4632] hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                 >
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-4 h-4 text-emerald-300" />
                   <span>View & Print Prescription Slip</span>
                 </a>
+              </div>
 
+              <div className="pt-3 border-t border-emerald-200">
                 <button
                   onClick={() => {
                     setCompletedRxId(null);
                     setSelectedPatient(null);
                   }}
-                  className="px-5 py-2.5 bg-[#0B4632] hover:bg-emerald-900 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                  className="px-6 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Examine Next Patient
                 </button>
@@ -463,7 +508,7 @@ export default function DoctorWorkspacePage() {
                     <div>
                       <h2 className="text-base font-bold text-stone-900">{selectedPatient.patients?.full_name}</h2>
                       <p className="text-xs text-stone-500">
-                        {selectedPatient.patients?.gender} • Phone: {selectedPatient.patients?.phone}
+                        {selectedPatient.patients?.gender} • Age: {getPatientAge(selectedPatient.patients?.date_of_birth)} • Phone: {selectedPatient.patients?.phone}
                       </p>
                     </div>
                   </div>
@@ -484,125 +529,63 @@ export default function DoctorWorkspacePage() {
                   </div>
                 </div>
 
-                {/* STEP 22: VITALS QUICK PRESETS & ALERT BADGES */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
-                      Clinical Vitals & Measurements
-                    </span>
-
-                    {(isHighBP || isHighTemp) && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[10px] font-bold animate-pulse">
-                        <ShieldAlert className="w-3 h-3 text-rose-600" />
-                        Abnormal Vitals Detected
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Vitals Input Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
-                      <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
-                        <HeartPulse className="w-3.5 h-3.5 text-rose-600" /> Blood Pressure
-                      </span>
-                      <input
-                        type="text"
-                        value={vitals.bp}
-                        onChange={(e) => setVitals({ ...vitals, bp: e.target.value })}
-                        className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
-                      <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
-                        <Activity className="w-3.5 h-3.5 text-emerald-700" /> Pulse Rate
-                      </span>
-                      <input
-                        type="text"
-                        value={vitals.pulse}
-                        onChange={(e) => setVitals({ ...vitals, pulse: e.target.value })}
-                        className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
-                      <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
-                        <Thermometer className="w-3.5 h-3.5 text-amber-600" /> Temperature
-                      </span>
-                      <input
-                        type="text"
-                        value={vitals.temp}
-                        onChange={(e) => setVitals({ ...vitals, temp: e.target.value })}
-                        className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-1">
-                      <span className="text-[10px] font-bold text-stone-500 uppercase flex items-center gap-1">
-                        <Weight className="w-3.5 h-3.5 text-indigo-600" /> Body Weight
-                      </span>
-                      <input
-                        type="text"
-                        value={vitals.weight}
-                        onChange={(e) => setVitals({ ...vitals, weight: e.target.value })}
-                        className="w-full bg-white px-2.5 py-1 text-xs font-bold text-stone-900 rounded-lg border border-stone-300 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Vitals Quick Tap Chips */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[10px] font-bold text-stone-400 uppercase mr-1">Vitals Presets:</span>
-                    <button
-                      type="button"
-                      onClick={() => setVitals({ bp: '120/80', pulse: '72 bpm', temp: '98.6 °F', weight: vitals.weight })}
-                      className="px-2 py-0.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-semibold rounded-md border border-stone-200 cursor-pointer"
-                    >
-                      Normal (120/80)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setVitals({ bp: '150/95', pulse: '88 bpm', temp: '98.6 °F', weight: vitals.weight })}
-                      className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-semibold rounded-md border border-amber-200 cursor-pointer"
-                    >
-                      Hypertensive (150/95)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setVitals({ bp: '110/70', pulse: '104 bpm', temp: '101.4 °F', weight: vitals.weight })}
-                      className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-800 text-[10px] font-semibold rounded-md border border-rose-200 cursor-pointer"
-                    >
-                      Febrile Rush (101.4 °F)
-                    </button>
-                  </div>
-                </div>
-
-                {/* DIAGNOSIS INPUTS */}
+                {/* DIAGNOSIS INPUTS WITH PLACEHOLDER */}
                 <div className="space-y-3 pt-2">
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
                       Chief Symptoms / Recorded Complaint
                     </label>
-                    <textarea
-                      rows={2}
-                      value={clinicalSymptoms}
-                      onChange={(e) => setClinicalSymptoms(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:border-[#0B4632]"
-                    />
+
+                    <div className="relative">
+                      <textarea
+                        rows={2}
+                        placeholder="General Malaise / Regular Checkup"
+                        value={clinicalSymptoms}
+                        onChange={(e) => setClinicalSymptoms(e.target.value)}
+                        className="w-full pl-3.5 pr-10 py-2 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:border-[#0B4632]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleVoiceScribe('symptoms')}
+                        className={`absolute right-3 top-3 p-1.5 rounded-lg transition cursor-pointer ${
+                          isListeningSymptoms
+                            ? 'bg-rose-600 text-white animate-pulse'
+                            : 'text-stone-500 hover:text-[#0B4632] hover:bg-stone-200'
+                        }`}
+                        title="Dictate Symptoms"
+                      >
+                        {isListeningSymptoms ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-1">
                     <label className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
                       Doctor's Clinical Diagnosis *
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Acute Allergic Rhinitis / Hyperacidity"
-                      value={clinicalDiagnosis}
-                      onChange={(e) => setClinicalDiagnosis(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs sm:text-sm font-bold text-stone-900 focus:outline-none focus:border-[#0B4632]"
-                    />
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Acute Allergic Rhinitis / Hyperacidity"
+                        value={clinicalDiagnosis}
+                        onChange={(e) => setClinicalDiagnosis(e.target.value)}
+                        className="w-full pl-3.5 pr-10 py-2.5 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs sm:text-sm font-bold text-stone-900 focus:outline-none focus:border-[#0B4632]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleVoiceScribe('diagnosis')}
+                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition cursor-pointer ${
+                          isListeningDiagnosis
+                            ? 'bg-rose-600 text-white animate-pulse'
+                            : 'text-stone-500 hover:text-[#0B4632] hover:bg-stone-200'
+                        }`}
+                        title="Dictate Diagnosis"
+                      >
+                        {isListeningDiagnosis ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -623,7 +606,6 @@ export default function DoctorWorkspacePage() {
                   </button>
                 </div>
 
-                {/* Quick Presets */}
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">
                     Quick-Tap Medicine Presets:
@@ -642,7 +624,6 @@ export default function DoctorWorkspacePage() {
                   </div>
                 </div>
 
-                {/* Medicine Table Inputs */}
                 <div className="space-y-3 pt-2">
                   {medicines.map((med, index) => (
                     <div key={index} className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-2 relative">
@@ -731,7 +712,6 @@ export default function DoctorWorkspacePage() {
                   ))}
                 </div>
 
-                {/* COMMIT BUTTON */}
                 <button
                   type="submit"
                   disabled={loading}
@@ -742,7 +722,7 @@ export default function DoctorWorkspacePage() {
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      <span>Complete Consultation & Save Rx Record</span>
+                      <span>Complete Consultation & Generate Rx & Payment QR</span>
                     </>
                   )}
                 </button>
@@ -752,7 +732,18 @@ export default function DoctorWorkspacePage() {
         </div>
       </div>
 
-      {/* PAST MEDICAL HISTORY MODAL */}
+      {/* UPI PAYMENT MODAL */}
+      {showPaymentModal && (
+        <UpiPaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          patientName={completedPatientName}
+          tokenNumber={completedTokenNumber}
+          consultationFee={100}
+        />
+      )}
+
+      {/* PAST HISTORY MODAL */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
@@ -791,9 +782,6 @@ export default function DoctorWorkspacePage() {
                           month: 'short',
                           year: 'numeric'
                         })}
-                      </span>
-                      <span className="text-stone-500 font-medium">
-                        BP: {item.vitals?.bp || 'N/A'} • Temp: {item.vitals?.temp || 'N/A'}
                       </span>
                     </div>
 

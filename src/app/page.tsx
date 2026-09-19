@@ -3,52 +3,82 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { generateWhatsAppTokenLink, triggerSmsPrompt } from '@/lib/notifications';
 import { 
   UserPlus, 
   Phone, 
   User, 
-  Calendar, 
-  AlertTriangle, 
   CheckCircle2, 
   Stethoscope, 
   Sparkles, 
   ArrowRight,
-  ShieldAlert,
-  Clock,
-  HeartPulse
+  Minus,
+  Plus,
+  AlertCircle,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 
 export default function PatientRegistrationPage() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState('Male');
+  const [age, setAge] = useState<number>(25);
   const [allergies, setAllergies] = useState('');
   const [symptoms, setSymptoms] = useState('');
   const [urgencyLevel, setUrgencyLevel] = useState<'Normal' | 'Priority' | 'Emergency'>('Normal');
 
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [tokenResult, setTokenResult] = useState<{
     tokenNumber: number;
     patientName: string;
+    phone: string;
     urgency: string;
   } | null>(null);
 
+  const validateForm = (): boolean => {
+    setErrorMessage(null);
+
+    const trimmedName = fullName.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      setErrorMessage('Please enter a valid patient name (at least 2 characters).');
+      return false;
+    }
+
+    const cleanPhone = phone.trim().replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setErrorMessage('Please enter a valid 10-digit mobile phone number.');
+      return false;
+    }
+
+    if (isNaN(age) || age < 1 || age > 110) {
+      setErrorMessage('Please enter a realistic age between 1 and 110 years.');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim()) {
-      alert('Please fill in required fields (Name and Phone Number).');
-      return;
-    }
+
+    if (!validateForm()) return;
 
     setLoading(true);
 
     try {
-      // 1. Insert or check patient record
+      const cleanPhone = phone.trim().replace(/\D/g, '');
+
+      const currentYear = new Date().getFullYear();
+      const birthYear = currentYear - age;
+      const dobToInsert = `${birthYear}-01-01`;
+
       let patientId = '';
       const { data: existingPatient } = await supabase
         .from('patients')
         .select('id')
-        .eq('phone', phone.trim())
+        .eq('phone', cleanPhone)
         .single();
 
       if (existingPatient) {
@@ -59,8 +89,9 @@ export default function PatientRegistrationPage() {
           .insert([
             {
               full_name: fullName.trim(),
-              phone: phone.trim(),
+              phone: cleanPhone,
               gender: gender,
+              date_of_birth: dobToInsert,
               allergies: allergies.trim() || 'None'
             }
           ])
@@ -70,7 +101,6 @@ export default function PatientRegistrationPage() {
         patientId = newPatient[0].id;
       }
 
-      // 2. Calculate next token number for today
       const today = new Date().toISOString().split('T')[0];
       const { data: todayApps } = await supabase
         .from('appointments')
@@ -81,7 +111,6 @@ export default function PatientRegistrationPage() {
 
       const nextToken = todayApps && todayApps.length > 0 ? todayApps[0].token_number + 1 : 1;
 
-      // 3. Create appointment queue entry
       const { error: appError } = await supabase
         .from('appointments')
         .insert([
@@ -90,8 +119,7 @@ export default function PatientRegistrationPage() {
             appointment_date: today,
             token_number: nextToken,
             urgency_level: urgencyLevel,
-            status: 'Pending',
-            symptoms: symptoms.trim() || 'General Consultation'
+            status: 'Pending'
           }
         ]);
 
@@ -100,18 +128,20 @@ export default function PatientRegistrationPage() {
       setTokenResult({
         tokenNumber: nextToken,
         patientName: fullName.trim(),
+        phone: cleanPhone,
         urgency: urgencyLevel
       });
 
-      // Clear form
+      // Clear form inputs
       setFullName('');
       setPhone('');
+      setAge(25);
       setAllergies('');
       setSymptoms('');
       setUrgencyLevel('Normal');
 
     } catch (err: any) {
-      alert(`Error creating token: ${err.message || 'Please try again.'}`);
+      setErrorMessage(`Error creating token: ${err.message || 'Please try again.'}`);
     } finally {
       setLoading(false);
     }
@@ -153,9 +183,16 @@ export default function PatientRegistrationPage() {
           </div>
         </div>
 
+        {errorMessage && (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs font-bold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {tokenResult ? (
-          /* GENERATED TOKEN SUCCESS CARD */
-          <div className="bg-emerald-50 border-2 border-emerald-300 rounded-3xl p-8 text-center space-y-4">
+          /* GENERATED TOKEN SUCCESS CARD WITH NOTIFICATIONS */
+          <div className="bg-emerald-50 border-2 border-emerald-300 rounded-3xl p-8 text-center space-y-5">
             <div className="w-14 h-14 bg-[#0B4632] text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
               <CheckCircle2 className="w-8 h-8 text-emerald-300" />
             </div>
@@ -171,7 +208,37 @@ export default function PatientRegistrationPage() {
               Token generated for <strong className="text-stone-900">{tokenResult.patientName}</strong>. Please report to Reception or check in at the waiting room.
             </p>
 
-            <div className="pt-2 flex items-center justify-center gap-3">
+            {/* NOTIFICATION BUTTONS */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <a
+                href={generateWhatsAppTokenLink({
+                  patientName: tokenResult.patientName,
+                  phone: tokenResult.phone,
+                  tokenNumber: tokenResult.tokenNumber
+                })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Send WhatsApp Token Pass</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => triggerSmsPrompt({
+                  patientName: tokenResult.patientName,
+                  phone: tokenResult.phone,
+                  tokenNumber: tokenResult.tokenNumber
+                })}
+                className="px-4 py-2 bg-stone-800 hover:bg-stone-900 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5 text-amber-300" />
+                <span>SMS Alert</span>
+              </button>
+            </div>
+
+            <div className="pt-3 border-t border-emerald-200/60 flex items-center justify-center gap-3">
               <button
                 onClick={() => setTokenResult(null)}
                 className="px-6 py-2.5 bg-[#0B4632] hover:bg-emerald-950 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
@@ -210,23 +277,27 @@ export default function PatientRegistrationPage() {
 
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
-                  Mobile Number *
+                  Mobile Number (10 Digits) *
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
                     required
-                    placeholder="10-digit mobile number"
+                    maxLength={10}
+                    placeholder="e.g. 9820098200"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => {
+                      const onlyNums = e.target.value.replace(/\D/g, '');
+                      setPhone(onlyNums);
+                    }}
                     className="w-full pl-9 pr-3.5 py-2.5 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs font-bold text-stone-900 focus:outline-none focus:border-[#0B4632]"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
                   Gender
@@ -244,11 +315,45 @@ export default function PatientRegistrationPage() {
 
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
+                  Age (1 - 110 Yrs) *
+                </label>
+                <div className="flex items-center gap-1 bg-[#F6F4EE] border border-stone-200 rounded-xl p-1">
+                  <button
+                    type="button"
+                    onClick={() => setAge((prev) => Math.max(1, prev - 1))}
+                    className="p-1.5 bg-white hover:bg-stone-200 rounded-lg text-stone-700 transition cursor-pointer"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    max="110"
+                    value={age}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      if (val > 110) setAge(110);
+                      else setAge(val);
+                    }}
+                    className="w-full text-center bg-transparent text-xs font-black text-stone-900 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAge((prev) => Math.min(110, prev + 1))}
+                    className="p-1.5 bg-white hover:bg-stone-200 rounded-lg text-stone-700 transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
                   Known Allergies (Optional)
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Sulfa drugs, Penicillin, Dust"
+                  placeholder="e.g. Sulfa drugs, Penicillin"
                   value={allergies}
                   onChange={(e) => setAllergies(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs font-bold text-stone-900 focus:outline-none focus:border-[#0B4632]"
