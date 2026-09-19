@@ -2,34 +2,29 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { 
-  HeartPulse, 
-  Printer, 
-  Phone, 
-  ArrowLeft
-} from 'lucide-react';
+import { generateWhatsAppRxLink } from '@/lib/notifications';
+import { Printer, HeartPulse, MessageSquare, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
-interface PrescriptionDetails {
+interface PrescriptionDetail {
   id: string;
   issue_date: string;
-  consultations: {
-    diagnosis: string;
-    symptoms: string;
-    vitals: {
-      bp?: string;
-      pulse?: string;
-      temp?: string;
-      weight?: string;
-    };
-  };
+  patient_id: string;
+  consultation_id: string;
   patients: {
     full_name: string;
     phone: string;
     gender: string;
     date_of_birth: string;
     allergies: string;
+  };
+  consultations: {
+    symptoms: string;
+    diagnosis: string;
+    vitals: {
+      weight?: string;
+    };
   };
   prescription_items: Array<{
     id: string;
@@ -41,33 +36,36 @@ interface PrescriptionDetails {
   }>;
 }
 
-export default function PrintablePrescriptionPage() {
+export default function PrescriptionSlipPage() {
   const params = useParams();
-  const rxId = params?.id as string;
+  const id = params.id as string;
 
-  const [data, setData] = useState<PrescriptionDetails | null>(null);
+  const [data, setData] = useState<PrescriptionDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!rxId) return;
-
     const fetchPrescription = async () => {
+      if (!id) return;
+      setLoading(true);
+
       const { data: rx, error } = await supabase
         .from('prescriptions')
         .select(`
           id,
           issue_date,
-          consultations (
-            diagnosis,
-            symptoms,
-            vitals
-          ),
+          patient_id,
+          consultation_id,
           patients (
             full_name,
             phone,
             gender,
             date_of_birth,
             allergies
+          ),
+          consultations (
+            symptoms,
+            diagnosis,
+            vitals
           ),
           prescription_items (
             id,
@@ -78,211 +76,189 @@ export default function PrintablePrescriptionPage() {
             instructions
           )
         `)
-        .eq('id', rxId)
+        .eq('id', id)
         .single();
 
       if (!error && rx) {
-        setData(rx as unknown as PrescriptionDetails);
+        setData(rx as unknown as PrescriptionDetail);
       }
       setLoading(false);
     };
 
     fetchPrescription();
-  }, [rxId]);
+  }, [id]);
 
-  const handlePrint = () => {
-    window.print();
+  const getPatientAge = (dobString?: string) => {
+    if (!dobString) return 'N/A';
+    const birthYear = new Date(dobString).getFullYear();
+    const currentYear = new Date().getFullYear();
+    const calculatedAge = currentYear - birthYear;
+    return isNaN(calculatedAge) || calculatedAge <= 0 ? 'N/A' : `${calculatedAge} Yrs`;
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-6 text-stone-600 font-sans">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-          <span className="w-3 h-3 rounded-full bg-[#0B4632] animate-ping" />
-          <span>Generating Digital Letterhead...</span>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] text-stone-600 font-bold text-xs">
+        Generating Prescription Letterhead...
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-[#FAF8F5] flex flex-col items-center justify-center p-6 text-center space-y-4">
-        <h2 className="text-xl font-bold text-stone-900">Prescription Record Not Found</h2>
-        <p className="text-xs text-stone-500">The requested prescription ID does not exist or has been removed.</p>
-        <Link href="/doctor" className="px-5 py-2.5 bg-[#0B4632] text-white text-xs font-bold rounded-xl">
-          Return to Doctor Workspace
-        </Link>
+      <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] text-stone-600 font-bold text-xs">
+        Prescription record not found.
       </div>
     );
   }
 
+  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+  const whatsappUrl = generateWhatsAppRxLink({
+    patientName: data.patients?.full_name || 'Patient',
+    phone: data.patients?.phone || '',
+    tokenNumber: 0,
+    doctorName: 'Dr. Sarika B. Singh',
+    rxUrl: currentUrl
+  });
+
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-stone-900 font-sans p-4 sm:p-8">
-      {/* TOP ACTION BAR */}
-      <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between print:hidden">
+    <div className="min-h-screen bg-stone-100 p-4 sm:p-8 font-sans print:p-0 print:bg-white">
+      {/* ACTION BAR (HIDDEN ON PRINT) */}
+      <div className="max-w-3xl mx-auto mb-6 flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden">
         <Link
           href="/doctor"
-          className="inline-flex items-center gap-2 text-xs font-bold text-stone-700 hover:text-[#0B4632] transition"
+          className="text-xs font-bold text-stone-600 hover:text-[#0B4632] flex items-center gap-1 transition"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Doctor Desk</span>
         </Link>
 
-        <button
-          onClick={handlePrint}
-          className="px-6 py-2.5 bg-[#0B4632] hover:bg-emerald-950 text-white text-xs font-bold rounded-full shadow-md transition flex items-center gap-2 cursor-pointer"
-        >
-          <Printer className="w-4 h-4 text-amber-300" />
-          <span>Print Prescription Slip</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* SEND TO WHATSAPP BUTTON */}
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Send Prescription on WhatsApp</span>
+          </a>
+
+          {/* PRINT / SAVE PDF BUTTON */}
+          <button
+            onClick={() => window.print()}
+            className="px-4 py-2.5 bg-[#0B4632] hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-amber-300" />
+            <span>Print / Save PDF</span>
+          </button>
+        </div>
       </div>
 
-      {/* PRINTABLE LETTERHEAD CANVAS */}
-      <div className="max-w-4xl mx-auto bg-white rounded-3xl border border-stone-200/90 shadow-lg p-8 sm:p-12 space-y-8 print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none">
+      {/* PRINTABLE LETTERHEAD */}
+      <div className="max-w-3xl mx-auto bg-white p-8 sm:p-12 rounded-3xl border border-stone-200 shadow-xl print:shadow-none print:border-none print:rounded-none space-y-8">
         
         {/* CLINIC HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b-2 border-[#0B4632] pb-6">
+        <div className="flex justify-between items-start border-b-2 border-[#0B4632] pb-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-[#0B4632] text-white flex items-center justify-center">
-                <HeartPulse className="w-4 h-4 text-emerald-300" />
+              <div className="w-8 h-8 rounded-lg bg-[#0B4632] text-white flex items-center justify-center">
+                <HeartPulse className="w-5 h-5 text-emerald-300" />
               </div>
-              <h1 className="text-2xl font-black text-stone-900 tracking-tight">
-                DHANWANTRI <span className="text-[#0B4632] font-serif italic font-normal">CLINIC</span>
-              </h1>
+              <h1 className="text-2xl font-black text-[#0B4632] tracking-tight">DHANWANTRI CLINIC</h1>
             </div>
-            <p className="text-xs font-bold text-[#D97706] uppercase tracking-wider">
-              Integrated Ayurveda & General Outpatient Medical Suite
-            </p>
-            <p className="text-[11px] text-stone-500 max-w-md">
-              Shop No. 7, Priyal Enclave, Opp. R. K. Hotel, Near Bharti Park, Mira Road (East), Thane - 401107
-            </p>
+            <p className="text-xs font-bold text-amber-800">Dr. Sarika B. Singh (B.A.M.S.)</p>
+            <p className="text-[11px] text-stone-500">Reg. No. 40421 • Integrated Ayurveda & Primary Medical Care</p>
           </div>
 
-          <div className="sm:text-right space-y-1 border-t sm:border-t-0 pt-4 sm:pt-0 border-stone-100">
-            <h2 className="text-base font-bold text-stone-900">Dr. Sarika B. Singh</h2>
-            <p className="text-xs font-bold text-[#0B4632]">B.A.M.S. (Mumbai University, 2000)</p>
-            <p className="text-[10px] text-stone-500">Reg. MCIM No. 40421 • 23+ Years Experience</p>
-            <p className="text-[10px] text-stone-500 flex items-center sm:justify-end gap-1 pt-1">
-              <Phone className="w-3 h-3 text-[#0B4632]" />
-              <span>+91 98200 00000</span>
-            </p>
+          <div className="text-right text-[11px] text-stone-600 space-y-0.5">
+            <p className="font-bold text-stone-900">Mira Road (East), Thane</p>
+            <p>Shop No. 7, Priyal Enclave</p>
+            <p>Ph: +91 98200 00000</p>
+            <p className="font-semibold text-[#0B4632]">OPD: 11 AM–2 PM | 7 PM–10 PM</p>
           </div>
         </div>
 
-        {/* PATIENT DEMOGRAPHICS & DATE STRIP */}
+        {/* PATIENT PARTICULARS */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-[#F6F4EE] border border-stone-200 text-xs">
           <div>
-            <span className="text-[10px] font-bold uppercase text-stone-500 block">Patient Name</span>
+            <span className="text-[10px] font-bold text-stone-400 uppercase block">Patient Name</span>
             <span className="font-bold text-stone-900">{data.patients?.full_name}</span>
           </div>
 
           <div>
-            <span className="text-[10px] font-bold uppercase text-stone-500 block">Gender / Phone</span>
-            <span className="font-semibold text-stone-800">
-              {data.patients?.gender} • {data.patients?.phone}
-            </span>
+            <span className="text-[10px] font-bold text-stone-400 uppercase block">Gender / Age</span>
+            <span className="font-bold text-stone-900">{data.patients?.gender} / {getPatientAge(data.patients?.date_of_birth)}</span>
           </div>
 
           <div>
-            <span className="text-[10px] font-bold uppercase text-stone-500 block">Known Allergies</span>
-            <span className="font-bold text-rose-700">{data.patients?.allergies || 'None'}</span>
+            <span className="text-[10px] font-bold text-stone-400 uppercase block">Phone Number</span>
+            <span className="font-bold text-stone-900">{data.patients?.phone}</span>
           </div>
 
           <div>
-            <span className="text-[10px] font-bold uppercase text-stone-500 block">Issue Date</span>
-            <span className="font-bold text-stone-900">{data.issue_date}</span>
+            <span className="text-[10px] font-bold text-stone-400 uppercase block">Date</span>
+            <span className="font-bold text-stone-900">
+              {new Date(data.issue_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
           </div>
         </div>
 
-        {/* CLINICAL VITALS GRID */}
-        {data.consultations?.vitals && (
-          <div className="space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
-              Recorded Clinical Vitals
-            </span>
-            <div className="grid grid-cols-4 gap-3 text-xs">
-              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between">
-                <span className="text-stone-500 font-medium">BP:</span>
-                <span className="font-bold text-stone-900">{data.consultations.vitals.bp || '120/80'}</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between">
-                <span className="text-stone-500 font-medium">Pulse:</span>
-                <span className="font-bold text-stone-900">{data.consultations.vitals.pulse || '72 bpm'}</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between">
-                <span className="text-stone-500 font-medium">Temp:</span>
-                <span className="font-bold text-stone-900">{data.consultations.vitals.temp || '98.6 °F'}</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between">
-                <span className="text-stone-500 font-medium">Weight:</span>
-                <span className="font-bold text-stone-900">{data.consultations.vitals.weight || '65 kg'}</span>
-              </div>
-            </div>
+        {/* DIAGNOSIS & SYMPTOMS */}
+        <div className="space-y-2 border-b border-stone-200 pb-4">
+          <div className="flex gap-2 text-xs">
+            <strong className="text-stone-700 shrink-0">Diagnosis:</strong>
+            <span className="font-bold text-[#0B4632]">{data.consultations?.diagnosis}</span>
           </div>
-        )}
-
-        {/* DIAGNOSIS SUMMARY */}
-        <div className="space-y-1.5 p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[#D97706] block">
-            Clinical Diagnosis & Chief Complaints
-          </span>
-          <p className="text-sm font-bold text-stone-900">{data.consultations?.diagnosis}</p>
-          {data.consultations?.symptoms && (
-            <p className="text-xs text-stone-600">Symptoms: {data.consultations.symptoms}</p>
-          )}
+          <div className="flex gap-2 text-xs text-stone-600">
+            <strong className="text-stone-700 shrink-0">Complaints:</strong>
+            <span>{data.consultations?.symptoms}</span>
+          </div>
         </div>
 
-        {/* PRESCRIPTION RX TABLE */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 border-b border-stone-200 pb-2">
-            <span className="text-2xl font-serif font-black text-[#0B4632]">Rx</span>
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-500">
-              Prescribed Medication & Dosage Schedule
-            </span>
-          </div>
+        {/* RX MEDICATION TABLE */}
+        <div className="space-y-4 min-h-[220px]">
+          <span className="text-2xl font-black text-[#0B4632] font-serif block">Rx</span>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-stone-200 text-stone-500 uppercase font-bold text-[10px]">
-                  <th className="py-2.5 px-3">#</th>
-                  <th className="py-2.5 px-3">Medicine Name</th>
-                  <th className="py-2.5 px-3">Dosage</th>
-                  <th className="py-2.5 px-3">Frequency</th>
-                  <th className="py-2.5 px-3">Duration</th>
-                  <th className="py-2.5 px-3">Instructions</th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-stone-300 text-[11px] font-bold uppercase text-stone-500">
+                <th className="py-2">#</th>
+                <th className="py-2">Medicine Name</th>
+                <th className="py-2">Dosage</th>
+                <th className="py-2">Frequency</th>
+                <th className="py-2">Duration</th>
+                <th className="py-2">Instructions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-200 text-xs">
+              {data.prescription_items?.map((item, index) => (
+                <tr key={item.id}>
+                  <td className="py-3 font-bold text-stone-400">{index + 1}</td>
+                  <td className="py-3 font-bold text-stone-900">{item.medicine_name}</td>
+                  <td className="py-3 font-semibold text-stone-700">{item.dosage}</td>
+                  <td className="py-3 font-semibold text-stone-700">{item.frequency}</td>
+                  <td className="py-3 font-semibold text-stone-700">{item.duration}</td>
+                  <td className="py-3 text-stone-600">{item.instructions}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 font-medium text-stone-800">
-                {data.prescription_items?.map((item, idx) => (
-                  <tr key={item.id || idx} className="hover:bg-stone-50">
-                    <td className="py-3 px-3 font-bold text-stone-400">{idx + 1}</td>
-                    <td className="py-3 px-3 font-bold text-stone-900">{item.medicine_name}</td>
-                    <td className="py-3 px-3">{item.dosage}</td>
-                    <td className="py-3 px-3 font-semibold text-[#0B4632]">{item.frequency}</td>
-                    <td className="py-3 px-3">{item.duration}</td>
-                    <td className="py-3 px-3 text-stone-600">{item.instructions}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        {/* SIGNATURE & FOOTER */}
-        <div className="pt-12 flex items-end justify-between border-t border-stone-200">
-          <div className="text-[10px] text-stone-400 space-y-1">
-            <p>Generated digitally via ArogyaSetu Cloud Engine.</p>
-            <p>Dhanwantri Clinic • Primary Care & Clinical Ayurveda</p>
+        {/* FOOTER SIGNATURE AREA */}
+        <div className="pt-12 border-t border-stone-200 flex justify-between items-end">
+          <div className="text-[10px] text-stone-400 space-y-0.5">
+            <p>Valid without physical stamp when generated electronically.</p>
+            <p>ArogyaSetu Medical Cloud Platform</p>
           </div>
 
           <div className="text-center space-y-1">
-            <div className="w-36 border-b border-stone-400 mb-1 h-12 flex items-end justify-center">
-              <span className="font-serif italic text-xs text-stone-400">Dr. Sarika B. Singh</span>
-            </div>
-            <span className="text-[10px] font-bold text-stone-700 block uppercase">Authorized Signature</span>
+            <div className="w-36 h-12 border-b border-stone-400 mx-auto" />
+            <p className="text-xs font-bold text-stone-900">Dr. Sarika B. Singh</p>
+            <p className="text-[10px] text-stone-500">B.A.M.S. (Mumbai)</p>
           </div>
         </div>
       </div>
