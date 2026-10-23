@@ -29,7 +29,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const savedUser = localStorage.getItem('arogya_user');
     if (savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        setUser(parsed);
+        // Set cookie on client load if missing
+        document.cookie = `arogya_role=${parsed.role}; path=/`;
       } catch {
         localStorage.removeItem('arogya_user');
       }
@@ -40,6 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (userData: UserSession) => {
     setUser(userData);
     localStorage.setItem('arogya_user', JSON.stringify(userData));
+    // Set role cookie for server middleware
+    document.cookie = `arogya_role=${userData.role}; path=/`;
 
     if (userData.role === 'admin') {
       router.push('/doctor-workspace');
@@ -51,6 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('arogya_user');
+    // Clear cookie
+    document.cookie = 'arogya_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;';
     router.push('/login');
   };
 

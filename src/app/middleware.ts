@@ -4,10 +4,10 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Read role cookie or session header
+  // Read role cookie
   const userRole = request.cookies.get('arogya_role')?.value;
 
-  // Protect Admin / Doctor only routes
+  // Admin routes
   const protectedAdminRoutes = [
     '/doctor-workspace',
     '/reception',
@@ -19,8 +19,8 @@ export function middleware(request: NextRequest) {
     pathname.startsWith(route)
   );
 
+  // If trying to access admin route without admin cookie, redirect to /login
   if (isProtectedAdminRoute && userRole !== 'admin') {
-    // Redirect non-admins or unauthenticated users to login
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
