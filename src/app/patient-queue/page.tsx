@@ -11,11 +11,27 @@ export default function PatientQueuePage() {
 
   const [searchToken, setSearchToken] = useState('15');
   const [patientToken, setPatientToken] = useState<number | null>(15);
+  const [patientName, setPatientName] = useState('Rahul Sharma');
 
-  // REDIRECT DOCTOR/ADMIN AWAY FROM PATIENT-ONLY PAGE
   useEffect(() => {
     if (user?.role === 'admin') {
       router.push('/doctor-workspace');
+      return;
+    }
+
+    // Auto-detect last generated token from session storage
+    const activePass = localStorage.getItem('last_opd_token');
+    if (activePass) {
+      try {
+        const parsed = JSON.parse(activePass);
+        if (parsed.token) {
+          setPatientToken(parsed.token);
+          setSearchToken(String(parsed.token));
+          setPatientName(parsed.name || 'Registered Patient');
+        }
+      } catch {
+        // Fallback to default
+      }
     }
   }, [user, router]);
 
@@ -34,7 +50,7 @@ export default function PatientQueuePage() {
   };
 
   if (user?.role === 'admin') {
-    return null; // Render nothing while redirecting
+    return null;
   }
 
   return (
@@ -92,11 +108,10 @@ export default function PatientQueuePage() {
           </form>
         </div>
 
-        {/* LIVE TURN DASHBOARD */}
+        {/* LIVE TURN METRICS GRID */}
         {patientToken && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* CURRENT CALLING TOKEN */}
             <div className="bg-emerald-50/80 border-2 border-emerald-300 p-8 rounded-3xl shadow-sm text-center space-y-2">
               <span className="text-xs font-black uppercase tracking-widest text-emerald-800">
                 NOW IN CABIN
@@ -107,7 +122,6 @@ export default function PatientQueuePage() {
               <p className="text-xs font-bold text-emerald-700">Dr. Sarika B. Singh</p>
             </div>
 
-            {/* PATIENT'S TOKEN */}
             <div className="bg-white border-2 border-slate-200 p-8 rounded-3xl shadow-sm text-center space-y-2">
               <span className="text-xs font-extrabold uppercase tracking-widest text-slate-500">
                 YOUR TOKEN PASS
@@ -115,10 +129,9 @@ export default function PatientQueuePage() {
               <div className="text-5xl font-black text-slate-900 pt-2">
                 #{patientToken}
               </div>
-              <p className="text-xs font-bold text-slate-600">Rahul Sharma</p>
+              <p className="text-xs font-bold text-slate-600">{patientName}</p>
             </div>
 
-            {/* ESTIMATED WAIT TIME */}
             <div className="bg-amber-50/80 border-2 border-amber-300 p-8 rounded-3xl shadow-sm text-center space-y-2">
               <span className="text-xs font-extrabold uppercase tracking-widest text-amber-900">
                 ESTIMATED WAIT TIME
@@ -147,7 +160,6 @@ export default function PatientQueuePage() {
           </div>
 
           <div className="space-y-4">
-            
             <div className="p-4 bg-emerald-50 border-2 border-emerald-500 rounded-2xl flex justify-between items-center shadow-sm">
               <div className="flex items-center gap-4">
                 <span className="w-10 h-10 rounded-xl bg-emerald-700 text-white font-black flex items-center justify-center text-sm">
@@ -196,18 +208,17 @@ export default function PatientQueuePage() {
             <div className="p-4 bg-[#FFFDF9] border-2 border-emerald-400 rounded-2xl flex justify-between items-center shadow-md">
               <div className="flex items-center gap-4">
                 <span className="w-10 h-10 rounded-xl bg-emerald-800 text-white font-black flex items-center justify-center text-sm">
-                  #15
+                  #{patientToken || 15}
                 </span>
                 <div>
-                  <div className="font-black text-slate-900 text-base">Your Turn Pass (Rahul Sharma)</div>
-                  <div className="text-xs font-bold text-emerald-800">You are 3rd in line</div>
+                  <div className="font-black text-slate-900 text-base">Your Turn Pass ({patientName})</div>
+                  <div className="text-xs font-bold text-emerald-800">You are {tokensAhead} ahead in line</div>
                 </div>
               </div>
               <span className="px-3 py-1 bg-emerald-800 text-white font-black text-xs rounded-lg">
                 YOUR TURN NEXT
               </span>
             </div>
-
           </div>
         </div>
 
