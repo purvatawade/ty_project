@@ -47,16 +47,19 @@ export default function Navbar() {
             <span>Book OPD Slot</span>
           </Link>
 
-          <Link
-            href="/patient-queue"
-            className={`px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-1.5 ${
-              isActive('/patient-queue')
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                : 'text-slate-200 hover:text-white hover:bg-slate-800/60'
-            }`}
-          >
-            <span>Live Queue Tracker</span>
-          </Link>
+          {/* VISIBLE ONLY TO PATIENTS & GUESTS (HIDDEN FROM DOCTOR/ADMIN) */}
+          {user?.role !== 'admin' && (
+            <Link
+              href="/patient-queue"
+              className={`px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-1.5 ${
+                isActive('/patient-queue')
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                  : 'text-slate-200 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <span>Live Queue Tracker</span>
+            </Link>
+          )}
 
           <Link
             href="/clinic"
@@ -69,7 +72,7 @@ export default function Navbar() {
             <span>Doctor Profile &amp; Clinic</span>
           </Link>
 
-          {/* DOCTOR / ADMIN DROPDOWN & EXCLUSIVE ROUTES */}
+          {/* DOCTOR / ADMIN EXCLUSIVE ROUTES */}
           {user?.role === 'admin' && (
             <div className="relative">
               <button

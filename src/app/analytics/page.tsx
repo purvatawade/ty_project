@@ -1,251 +1,177 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 
-export default function HomePage() {
-  const [fullName, setFullName] = useState('');
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [gender, setGender] = useState('Male');
-  const [age, setAge] = useState(25);
-  const [allergies, setAllergies] = useState('');
-  const [symptoms, setSymptoms] = useState('');
-  const [triageLevel, setTriageLevel] = useState<'Normal' | 'Priority' | 'Emergency'>('Normal');
-
-  const handleGenerateToken = (e: React.FormEvent) => {
-    e.preventDefault();
-    alert(`OPD Token Pass generated for ${fullName || 'Patient'}!`);
-  };
-
+export default function AnalyticsPage() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 pt-8 pb-16 px-4 sm:px-6 lg:px-8">
-      {/* WIDE CENTERED CONTAINER */}
       <div className="max-w-6xl mx-auto space-y-8">
         
-        {/* TOP HERO BANNER - RESTORED SOFT MEDICAL GREEN */}
-        <div className="bg-[#064E3B] border border-emerald-800/60 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-md text-white">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-white font-bold text-2xl shrink-0">
-              🩺
+        {/* HEADER CARD */}
+        <div className="bg-[#FFFDF9] border-2 border-emerald-200/80 rounded-3xl p-8 shadow-xl shadow-emerald-950/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 font-extrabold text-3xl shrink-0">
+              📊
             </div>
             <div>
-              <div className="inline-block px-3 py-0.5 bg-emerald-800/80 border border-emerald-700/80 text-emerald-100 text-xs font-semibold rounded-full mb-1.5">
-                🟢 OPD Open Now • Morning Session
-              </div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-white">
-                Dhanwantri Clinic • Dr. Sarika B. Singh
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                OPD &amp; Triage Analytics Dashboard
               </h1>
-              <p className="text-emerald-100 text-sm mt-1 max-w-xl">
-                23+ Years Experience • Integrated Ayurveda &amp; Primary Medical Care
+              <p className="text-slate-600 font-semibold text-base mt-1">
+                Dhanwantri Clinic • Real-time Outpatient Insights &amp; Operational Throughput
               </p>
             </div>
           </div>
 
-          <Link
-            href="/clinic"
-            className="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition shadow-sm text-sm whitespace-nowrap"
-          >
-            <span>Learn More About Doctor</span>
-            <span>→</span>
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="p-3 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition shadow-sm text-slate-700 font-bold text-sm"
+              title="Refresh Data"
+            >
+              🔄
+            </button>
+            <Link
+              href="/reception"
+              className="bg-emerald-800 hover:bg-emerald-700 text-white font-black px-6 py-3.5 rounded-xl transition shadow-md flex items-center gap-2 text-sm tracking-wide"
+            >
+              <span>← Reception Desk</span>
+            </Link>
+          </div>
         </div>
 
-        {/* MAIN FORM CONTAINER */}
-        <div className="bg-[#FFFDF9] border-2 border-emerald-200/80 rounded-3xl p-8 sm:p-12 shadow-xl shadow-emerald-950/5">
+        {/* TOP METRICS GRID */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           
-          {/* HEADER */}
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200">
-            <div className="w-12 h-12 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 font-bold text-2xl shrink-0">
-              📋
+          <div className="bg-white border-2 border-slate-200 p-6 rounded-3xl shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                Total Tokens
+              </span>
+              <span className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 text-lg font-bold">
+                👥
+              </span>
             </div>
-            <div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-                Get Live OPD Digital Token
+            <div className="text-4xl font-black text-slate-900 tracking-tight pt-1">18</div>
+            <p className="text-xs font-bold text-slate-500">Total appointments booked today</p>
+          </div>
+
+          <div className="bg-emerald-50/60 border-2 border-emerald-200 p-6 rounded-3xl shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-emerald-800">
+                Completion Rate
+              </span>
+              <span className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-700 text-lg font-bold">
+                ✓
+              </span>
+            </div>
+            <div className="text-4xl font-black text-emerald-900 tracking-tight pt-1">78%</div>
+            <p className="text-xs font-bold text-emerald-700">14 consultations completed</p>
+          </div>
+
+          <div className="bg-amber-50/60 border-2 border-amber-200 p-6 rounded-3xl shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-amber-900">
+                Active Queue
+              </span>
+              <span className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 text-lg font-bold">
+                ⏱️
+              </span>
+            </div>
+            <div className="text-4xl font-black text-amber-900 tracking-tight pt-1">04</div>
+            <p className="text-xs font-bold text-amber-800">Currently in waiting area</p>
+          </div>
+
+          <div className="bg-sky-50/60 border-2 border-sky-200 p-6 rounded-3xl shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-sky-900">
+                Prescriptions Issued
+              </span>
+              <span className="w-10 h-10 rounded-xl bg-sky-100 border border-sky-300 flex items-center justify-center text-sky-700 text-lg font-bold">
+                💊
+              </span>
+            </div>
+            <div className="text-4xl font-black text-sky-900 tracking-tight pt-1">12</div>
+            <p className="text-xs font-bold text-sky-800">Digital Rx slips generated</p>
+          </div>
+
+        </div>
+
+        {/* DETAILED DATA SECTION */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          <div className="bg-white border-2 border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <span>⏱️</span>
+                <span>Triage Urgency Breakdown</span>
               </h2>
-              <p className="text-slate-600 text-sm font-medium mt-0.5">
-                Register walk-in patient or book instant OPD turn pass
-              </p>
+              <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                Total: 18
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                <span className="font-extrabold text-slate-800 text-base">Normal Priority</span>
+                <span className="font-black text-slate-900 text-base">12 Patients</span>
+              </div>
+
+              <div className="flex justify-between items-center p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                <span className="font-extrabold text-amber-900 text-base">Priority Triage</span>
+                <span className="font-black text-amber-950 text-base">04 Patients</span>
+              </div>
+
+              <div className="flex justify-between items-center p-4 bg-rose-50 border border-rose-200 rounded-2xl">
+                <span className="font-extrabold text-rose-900 text-base">Emergency Cases</span>
+                <span className="font-black text-rose-950 text-base">02 Patients</span>
+              </div>
             </div>
           </div>
 
-          {/* FORM */}
-          <form onSubmit={handleGenerateToken} className="space-y-6">
-            
-            {/* ROW 1: FULL NAME & MOBILE NUMBER */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                  Full Name <span className="text-emerald-600">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 text-base pointer-events-none">
-                    👤
-                  </span>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. Rahul Sharma"
-                    className="w-full bg-white border border-slate-300 text-slate-900 font-semibold pl-11 pr-4 py-3.5 rounded-xl focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 placeholder:text-slate-400 text-sm transition shadow-sm"
-                    required
-                  />
+          <div className="bg-white border-2 border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <span>📈</span>
+                <span>OPD Queue Stage Distribution</span>
+              </h2>
+              <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full uppercase tracking-wider">
+                Real-time Sync
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-5 bg-amber-50/80 border border-amber-200 rounded-2xl text-center space-y-1">
+                <div className="text-xs font-black text-amber-900 uppercase tracking-wider">
+                  Pending Arrival
                 </div>
+                <div className="text-3xl font-black text-amber-950">02</div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                  Mobile Number (10 Digits) <span className="text-emerald-600">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 text-base pointer-events-none">
-                    📞
-                  </span>
-                  <input
-                    type="tel"
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value)}
-                    placeholder="e.g. 9820098200"
-                    className="w-full bg-white border border-slate-300 text-slate-900 font-semibold pl-11 pr-4 py-3.5 rounded-xl focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 placeholder:text-slate-400 text-sm transition shadow-sm"
-                    required
-                  />
+              <div className="p-5 bg-sky-50/80 border border-sky-200 rounded-2xl text-center space-y-1">
+                <div className="text-xs font-black text-sky-900 uppercase tracking-wider">
+                  Checked In / Waiting
                 </div>
-              </div>
-            </div>
-
-            {/* ROW 2: GENDER, AGE & KNOWN ALLERGIES */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                  Gender
-                </label>
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 font-semibold px-4 py-3.5 rounded-xl focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 text-sm transition shadow-sm"
-                >
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
+                <div className="text-3xl font-black text-sky-950">02</div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                  Age (1 - 110 YRS) <span className="text-emerald-600">*</span>
-                </label>
-                <div className="flex items-center bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setAge(Math.max(1, age - 1))}
-                    className="px-4 py-3.5 bg-slate-100 text-slate-800 hover:bg-slate-200 font-extrabold text-base transition"
-                  >
-                    −
-                  </button>
-                  <span className="flex-1 text-center font-bold text-slate-900 text-base">
-                    {age}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setAge(Math.min(110, age + 1))}
-                    className="px-4 py-3.5 bg-slate-100 text-slate-800 hover:bg-slate-200 font-extrabold text-base transition"
-                  >
-                    +
-                  </button>
+              <div className="p-5 bg-emerald-50/80 border border-emerald-200 rounded-2xl text-center space-y-1">
+                <div className="text-xs font-black text-emerald-900 uppercase tracking-wider">
+                  Consultation Done
                 </div>
+                <div className="text-3xl font-black text-emerald-950">14</div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                  Known Allergies (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={allergies}
-                  onChange={(e) => setAllergies(e.target.value)}
-                  placeholder="e.g. Sulfa drugs, Penicillin"
-                  className="w-full bg-white border border-slate-300 text-slate-900 font-semibold px-4 py-3.5 rounded-xl focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 placeholder:text-slate-400 text-sm transition shadow-sm"
-                />
+              <div className="p-5 bg-purple-50/80 border border-purple-200 rounded-2xl text-center space-y-1">
+                <div className="text-xs font-black text-purple-900 uppercase tracking-wider">
+                  Prescriptions Issued
+                </div>
+                <div className="text-3xl font-black text-purple-950">12</div>
               </div>
             </div>
+          </div>
 
-            {/* ROW 3: CHIEF SYMPTOMS */}
-            <div>
-              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-                Chief Symptoms / Medical Problem
-              </label>
-              <textarea
-                value={symptoms}
-                onChange={(e) => setSymptoms(e.target.value)}
-                rows={3}
-                placeholder="e.g. Fever, Cough, Severe Headache, Acidity"
-                className="w-full bg-white border border-slate-300 text-slate-900 font-semibold p-4 rounded-xl focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 placeholder:text-slate-400 text-sm transition resize-none shadow-sm"
-              />
-            </div>
-
-            {/* ROW 4: TRIAGE URGENCY LEVEL */}
-            <div>
-              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-                Triage Urgency Level
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                
-                {/* NORMAL */}
-                <button
-                  type="button"
-                  onClick={() => setTriageLevel('Normal')}
-                  className={`p-4 rounded-2xl border-2 text-left transition ${
-                    triageLevel === 'Normal'
-                      ? 'bg-emerald-50 border-emerald-600 text-emerald-950 shadow-md ring-2 ring-emerald-600/20'
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="font-bold text-base text-emerald-900">Normal</div>
-                  <div className="text-xs text-slate-500 font-medium mt-1">Standard OPD Queue</div>
-                </button>
-
-                {/* PRIORITY */}
-                <button
-                  type="button"
-                  onClick={() => setTriageLevel('Priority')}
-                  className={`p-4 rounded-2xl border-2 text-left transition ${
-                    triageLevel === 'Priority'
-                      ? 'bg-amber-50 border-amber-500 text-amber-950 shadow-md ring-2 ring-amber-500/20'
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="font-bold text-base text-amber-900">Priority</div>
-                  <div className="text-xs text-slate-500 font-medium mt-1">Senior Citizen / High Fever</div>
-                </button>
-
-                {/* EMERGENCY */}
-                <button
-                  type="button"
-                  onClick={() => setTriageLevel('Emergency')}
-                  className={`p-4 rounded-2xl border-2 text-left transition ${
-                    triageLevel === 'Emergency'
-                      ? 'bg-rose-50 border-rose-500 text-rose-950 shadow-md ring-2 ring-rose-500/20'
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="font-bold text-base text-rose-900">Emergency</div>
-                  <div className="text-xs text-slate-500 font-medium mt-1">Severe Pain / Acute Crisis</div>
-                </button>
-
-              </div>
-            </div>
-
-            {/* SUBMIT BUTTON */}
-            <div className="pt-4">
-              <button
-                type="submit"
-                className="w-full bg-[#064E3B] hover:bg-emerald-800 text-white font-black py-4 rounded-2xl transition shadow-lg flex items-center justify-center gap-2 text-base tracking-wide"
-              >
-                <span>✨</span>
-                <span>Generate Digital OPD Token Pass</span>
-              </button>
-            </div>
-
-          </form>
         </div>
 
       </div>
