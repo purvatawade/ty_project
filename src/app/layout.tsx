@@ -1,14 +1,12 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+import { AuthProvider } from '@/lib/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-
-const inter = Inter({ subsets: ['latin'] });
+import '@/app/globals.css';
 
 export const metadata: Metadata = {
-  title: 'ArogyaSetu • Dhanwantri Clinic Management System',
-  description: 'Digital Outpatient Management & Smart Triage Suite for Dr. Sarika B. Singh',
+  title: 'ArogyaSetu - Clinic Management System',
+  description: 'OPD Queue Management, Doctor Workspace & Patient Portal',
 };
 
 export default function RootLayout({
@@ -18,12 +16,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-[#FAF8F5] text-stone-900 antialiased min-h-screen flex flex-col`}>
-        <Navbar />
-        <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
-          {children}
-        </main>
-        <Footer />
+      <body className="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between">
+        <AuthProvider>
+          <Navbar />
+          <main className="flex-grow">{children}</main>
+          <Footer />
+        </AuthProvider>
       </body>
     </html>
   );
