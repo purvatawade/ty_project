@@ -32,45 +32,8 @@ interface QueueContextType {
 
 const QueueContext = createContext<QueueContextType | undefined>(undefined);
 
-const INITIAL_TOKENS: PatientToken[] = [
-  {
-    id: 'token-12',
-    tokenNumber: 12,
-    fullName: 'Rahul Sharma',
-    mobileNumber: '9820098200',
-    gender: 'Male',
-    age: 28,
-    allergies: 'Penicillin',
-    symptoms: 'Acute fever since 2 days, mild sore throat, headache',
-    triageLevel: 'Normal',
-    stage: 'In Room',
-    timestamp: '10:15 AM',
-  },
-  {
-    id: 'token-13',
-    tokenNumber: 13,
-    fullName: 'Priya Patel',
-    mobileNumber: '9820198201',
-    gender: 'Female',
-    age: 34,
-    symptoms: 'High fever (102°F) and severe body ache',
-    triageLevel: 'Priority',
-    stage: 'Waiting',
-    timestamp: '10:25 AM',
-  },
-  {
-    id: 'token-14',
-    tokenNumber: 14,
-    fullName: 'Amit Verma',
-    mobileNumber: '9820298202',
-    gender: 'Male',
-    age: 52,
-    symptoms: 'Chest discomfort and hypertension checkup',
-    triageLevel: 'Emergency',
-    stage: 'Waiting',
-    timestamp: '10:30 AM',
-  },
-];
+// EMPTY BASELINE - NO DEFAULT PATIENTS
+const INITIAL_TOKENS: PatientToken[] = [];
 
 export function QueueProvider({ children }: { children: React.ReactNode }) {
   const [tokens, setTokens] = useState<PatientToken[]>(() => {
@@ -94,6 +57,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
   const activeToken = tokens.find((t) => t.stage === 'In Room') || null;
 
   const addPatientToken = (patientData: Omit<PatientToken, 'id' | 'tokenNumber' | 'stage' | 'timestamp'>) => {
+    // Starts Token numbers from #1
     const nextTokenNum = tokens.length > 0 ? Math.max(...tokens.map((t) => t.tokenNumber)) + 1 : 1;
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -141,8 +105,9 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetQueue = () => {
-    setTokens(INITIAL_TOKENS);
+    setTokens([]);
     localStorage.removeItem('arogya_live_queue');
+    localStorage.removeItem('last_opd_token');
   };
 
   return (
