@@ -1,814 +1,139 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
-import UpiPaymentModal from '@/components/UpiPaymentModal';
-import { 
-  Stethoscope, 
-  Clock, 
-  Plus, 
-  Trash2, 
-  CheckCircle2, 
-  FileText, 
-  Pill, 
-  Send, 
-  Search,
-  History,
-  X,
-  Calendar,
-  Users,
-  BarChart3,
-  Mic,
-  MicOff,
-  QrCode
-} from 'lucide-react';
+import React from 'react';
 
-interface WaitingPatient {
-  id: string; // appointment_id
-  patient_id: string;
-  token_number: number;
-  urgency_level: 'Normal' | 'Priority' | 'Emergency';
-  status: string;
-  symptoms?: string;
-  patients: {
-    full_name: string;
-    phone: string;
-    gender: string;
-    date_of_birth: string;
-    allergies: string;
-  };
-}
-
-interface MedicineRow {
-  name: string;
-  dosage: string;
-  frequency: string;
-  duration: string;
-  instructions: string;
-}
-
-interface PastConsultation {
-  id: string;
-  created_at: string;
-  diagnosis: string;
-  symptoms: string;
-  prescriptions: Array<{
-    id: string;
-    prescription_items: Array<{
-      medicine_name: string;
-      dosage: string;
-      frequency: string;
-      duration: string;
-    }>;
-  }>;
-}
-
-export default function DoctorWorkspacePage() {
-  const [queue, setQueue] = useState<WaitingPatient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<WaitingPatient | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [completedRxId, setCompletedRxId] = useState<string | null>(null);
-  const [completedPatientName, setCompletedPatientName] = useState<string>('');
-  const [completedTokenNumber, setCompletedTokenNumber] = useState<number>(0);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [queueSearchQuery, setQueueSearchQuery] = useState('');
-
-  // Voice Scribe State
-  const [isListeningSymptoms, setIsListeningSymptoms] = useState(false);
-  const [isListeningDiagnosis, setIsListeningDiagnosis] = useState(false);
-
-  // Past History State
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [pastConsultations, setPastConsultations] = useState<PastConsultation[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
-  // Clinical Diagnosis & Symptoms
-  const [clinicalDiagnosis, setClinicalDiagnosis] = useState('');
-  const [clinicalSymptoms, setClinicalSymptoms] = useState('');
-
-  // Prescription Items Array
-  const [medicines, setMedicines] = useState<MedicineRow[]>([
-    { name: 'Tab Paracetamol 650mg', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', instructions: 'After food' }
-  ]);
-
-  const quickChips = [
-    { name: 'Tab Paracetamol 650mg', dosage: '1 Tab', frequency: '1-1-1', duration: '3 Days', instructions: 'After food for fever' },
-    { name: 'Cap Pantoprazole 40mg', dosage: '1 Cap', frequency: '1-0-0', duration: '7 Days', instructions: '30 mins before breakfast' },
-    { name: 'Tab Cetirizine 10mg', dosage: '1 Tab', frequency: '0-0-1', duration: '5 Days', instructions: 'At bedtime' },
-    { name: 'Tab Amoxicillin 500mg', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', instructions: 'After food' }
-  ];
-
-  const getPatientAge = (dobString?: string) => {
-    if (!dobString) return 'N/A';
-    const birthYear = new Date(dobString).getFullYear();
-    const currentYear = new Date().getFullYear();
-    const calculatedAge = currentYear - birthYear;
-    return isNaN(calculatedAge) || calculatedAge <= 0 ? 'N/A' : `${calculatedAge} Yrs`;
-  };
-
-  const toggleVoiceScribe = (target: 'symptoms' | 'diagnosis') => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert('Voice dictation is not supported on this browser. Please use Google Chrome or Microsoft Edge.');
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-IN';
-
-    if (target === 'symptoms') {
-      setIsListeningSymptoms(true);
-      recognition.start();
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setClinicalSymptoms((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        setIsListeningSymptoms(false);
-      };
-
-      recognition.onerror = () => setIsListeningSymptoms(false);
-      recognition.onend = () => setIsListeningSymptoms(false);
-    } else {
-      setIsListeningDiagnosis(true);
-      recognition.start();
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setClinicalDiagnosis((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        setIsListeningDiagnosis(false);
-      };
-
-      recognition.onerror = () => setIsListeningDiagnosis(false);
-      recognition.onend = () => setIsListeningDiagnosis(false);
-    }
-  };
-
-  const fetchQueue = async () => {
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('*, patients(*)')
-      .eq('appointment_date', today)
-      .in('status', ['Checked-In', 'In-Consultation'])
-      .order('token_number', { ascending: true });
-
-    if (!error && data) {
-      const rank = { Emergency: 1, Priority: 2, Normal: 3 };
-      const sorted = (data as unknown as WaitingPatient[]).sort((a, b) => {
-        if (rank[a.urgency_level] !== rank[b.urgency_level]) {
-          return rank[a.urgency_level] - rank[b.urgency_level];
-        }
-        return a.token_number - b.token_number;
-      });
-
-      setQueue(sorted);
-      if (!selectedPatient && sorted.length > 0) {
-        setSelectedPatient(sorted[0]);
-      }
-    }
-  };
-
-  useEffect(() => {
-    fetchQueue();
-
-    const channel = supabase
-      .channel('doctor_queue_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
-        fetchQueue();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (selectedPatient) {
-      setClinicalSymptoms(selectedPatient.symptoms || '');
-    }
-  }, [selectedPatient]);
-
-  const addMedicineRow = () => {
-    setMedicines([...medicines, { name: '', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', instructions: 'After food' }]);
-  };
-
-  const removeMedicineRow = (index: number) => {
-    if (medicines.length === 1) return;
-    setMedicines(medicines.filter((_, i) => i !== index));
-  };
-
-  const applyQuickChip = (chip: typeof quickChips[0]) => {
-    if (medicines.length === 1 && medicines[0].name === '') {
-      setMedicines([chip]);
-    } else {
-      setMedicines([...medicines, chip]);
-    }
-  };
-
-  const handleSelectPatient = async (patient: WaitingPatient) => {
-    setSelectedPatient(patient);
-    setCompletedRxId(null);
-
-    await supabase
-      .from('appointments')
-      .update({ status: 'In-Consultation' })
-      .eq('id', patient.id);
-
-    fetchQueue();
-  };
-
-  const fetchPatientHistory = async () => {
-    if (!selectedPatient) return;
-    setHistoryLoading(true);
-    setShowHistoryModal(true);
-
-    const { data, error } = await supabase
-      .from('consultations')
-      .select(`
-        id,
-        created_at,
-        diagnosis,
-        symptoms,
-        prescriptions (
-          id,
-          prescription_items (
-            medicine_name,
-            dosage,
-            frequency,
-            duration
-          )
-        )
-      `)
-      .eq('patient_id', selectedPatient.patient_id)
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setPastConsultations(data as unknown as PastConsultation[]);
-    }
-    setHistoryLoading(false);
-  };
-
-  const handleSubmitConsultation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPatient) return;
-    if (!clinicalDiagnosis.trim()) {
-      alert('Please enter a clinical diagnosis before finalizing.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const { data: consultData, error: consultError } = await supabase
-        .from('consultations')
-        .insert([
-          {
-            appointment_id: selectedPatient.id,
-            patient_id: selectedPatient.patient_id,
-            symptoms: clinicalSymptoms || 'General Consultation',
-            diagnosis: clinicalDiagnosis.trim(),
-            notes: 'Completed in Dhanwantri Doctor Desk'
-          }
-        ])
-        .select();
-
-      if (consultError) throw consultError;
-      const consultationId = consultData[0].id;
-
-      const { data: rxData, error: rxError } = await supabase
-        .from('prescriptions')
-        .insert([
-          {
-            consultation_id: consultationId,
-            patient_id: selectedPatient.patient_id,
-            issue_date: new Date().toISOString().split('T')[0]
-          }
-        ])
-        .select();
-
-      if (rxError) throw rxError;
-      const prescriptionId = rxData[0].id;
-
-      const validMedicines = medicines.filter(m => m.name.trim() !== '');
-      if (validMedicines.length > 0 && prescriptionId) {
-        const itemsToInsert = validMedicines.map(m => ({
-          prescription_id: prescriptionId,
-          medicine_name: m.name.trim(),
-          dosage: m.dosage,
-          frequency: m.frequency,
-          duration: m.duration,
-          instructions: m.instructions
-        }));
-
-        await supabase.from('prescription_items').insert(itemsToInsert);
-      }
-
-      await supabase
-        .from('appointments')
-        .update({ status: 'Completed' })
-        .eq('id', selectedPatient.id);
-
-      setCompletedRxId(prescriptionId);
-      setCompletedPatientName(selectedPatient.patients?.full_name || 'Patient');
-      setCompletedTokenNumber(selectedPatient.token_number);
-      setClinicalDiagnosis('');
-      setClinicalSymptoms('');
-      setMedicines([{ name: '', dosage: '1 Tab', frequency: '1-0-1', duration: '5 Days', instructions: 'After food' }]);
-      fetchQueue();
-
-    } catch (err: any) {
-      alert(`Unexpected Error: ${err.message || 'Failed to complete consultation'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredQueue = queue.filter(item => 
-    item.patients?.full_name.toLowerCase().includes(queueSearchQuery.toLowerCase()) ||
-    item.patients?.phone.includes(queueSearchQuery) ||
-    String(item.token_number).includes(queueSearchQuery)
-  );
-
+export default function DoctorDeskPage() {
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16 font-sans">
-      {/* HEADER BAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-stone-200/90 shadow-xs">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-[#0B4632] flex items-center justify-center text-white shadow-md">
-            <Stethoscope className="w-6 h-6 text-emerald-200" />
-          </div>
+    <div className="min-h-screen bg-slate-100 text-slate-900 pt-8 pb-16 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* HEADER */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-xl font-bold text-stone-900">Doctor Consultation Workspace</h1>
-            <p className="text-xs text-stone-500">Dr. Sarika B. Singh (B.A.M.S.) • Dhanwantri Clinic</p>
+            <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
+              LIVE CLINIC CONSOLE
+            </span>
+            <h1 className="text-3xl font-black text-slate-900 mt-2">
+              Doctor Workspace &amp; Voice Dictation Desk
+            </h1>
+            <p className="text-slate-600 font-medium text-sm mt-1">
+              Welcome, Dr. Sarika B. Singh. Manage live consultations, prescription dictations, and queue tokens.
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <button className="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition shadow-sm">
+              + Call Next Token
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href="/reception"
-            className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
-          >
-            <Users className="w-3.5 h-3.5 text-[#0B4632]" />
-            <span>Reception</span>
-          </Link>
-
-          <Link
-            href="/analytics"
-            className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
-          >
-            <BarChart3 className="w-3.5 h-3.5 text-[#0B4632]" />
-            <span>Analytics</span>
-          </Link>
-
-          <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
-            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-            Live Queue ({queue.length})
-          </span>
+        {/* DASHBOARD STATS ROW */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+            <div className="text-xs font-bold text-slate-500 uppercase">Total OPD Patients Today</div>
+            <div className="text-3xl font-black text-slate-900 mt-2">18</div>
+          </div>
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+            <div className="text-xs font-bold text-amber-600 uppercase">Waiting in Queue</div>
+            <div className="text-3xl font-black text-amber-700 mt-2">04</div>
+          </div>
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+            <div className="text-xs font-bold text-emerald-600 uppercase">Completed Consultations</div>
+            <div className="text-3xl font-black text-emerald-700 mt-2">14</div>
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* LEFT COLUMN: QUEUE LIST */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white rounded-3xl p-5 border border-stone-200/90 shadow-xs space-y-3">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-[#0B4632]" />
-                Checked-In Queue
+        {/* MAIN DESK & SKELETON CONTENT AREA */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* LEFT 2 COLS: ACTIVE CONSULTATION CARD */}
+          <div className="lg:col-span-2 bg-[#FFFDF9] border-2 border-emerald-200 p-8 rounded-3xl shadow-lg space-y-6">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+              <h2 className="text-xl font-extrabold text-slate-900">
+                Active Consultation Room
+              </h2>
+              <span className="px-3 py-1 bg-emerald-600 text-white font-bold text-xs rounded-lg">
+                CURRENT TOKEN: #12
               </span>
-              <span className="text-xs font-bold text-stone-400">{filteredQueue.length} Patients</span>
             </div>
 
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search patient name or phone..."
-                value={queueSearchQuery}
-                onChange={(e) => setQueueSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:border-[#0B4632]"
-              />
+            {/* ACTIVE PATIENT DATA */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-lg font-black text-slate-900">Rahul Sharma</div>
+                  <div className="text-xs font-semibold text-slate-500">Male • 28 Yrs • Phone: +91 9820098200</div>
+                </div>
+                <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold text-xs rounded">
+                  Standard OPD
+                </span>
+              </div>
+
+              <div>
+                <div className="text-xs font-bold text-slate-700 uppercase mb-1">Chief Symptoms</div>
+                <div className="p-3 bg-slate-50 border border-slate-200 text-slate-800 text-sm font-medium rounded-xl">
+                  Acute fever since 2 days, mild sore throat, headache.
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs font-bold text-slate-700 uppercase mb-1">Voice Dictation Notes (Speech API)</div>
+                <textarea
+                  rows={4}
+                  placeholder="Click mic to record medical notes or type prescription details..."
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-semibold p-4 rounded-xl focus:outline-none focus:border-emerald-600 text-sm transition resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-4 py-2 rounded-xl text-sm transition">
+                  Hold Token
+                </button>
+                <button className="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-5 py-2 rounded-xl text-sm transition shadow-sm">
+                  Complete &amp; Issue Rx
+                </button>
+              </div>
             </div>
-
-            {filteredQueue.length === 0 ? (
-              <div className="p-8 text-center text-stone-400 space-y-2">
-                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-600 opacity-60" />
-                <p className="text-xs font-semibold">No matching patients in queue.</p>
-              </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[550px] overflow-y-auto pr-1">
-                {filteredQueue.map((item) => {
-                  const isSelected = selectedPatient?.id === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => handleSelectPatient(item)}
-                      className={`w-full p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                        isSelected
-                          ? 'bg-emerald-50/90 border-[#0B4632] ring-2 ring-[#0B4632]/20 shadow-xs'
-                          : 'bg-[#F6F4EE] border-stone-200 hover:border-stone-300'
-                      }`}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base font-black text-[#0B4632] font-mono">
-                            #{String(item.token_number).padStart(2, '0')}
-                          </span>
-                          <span className="text-xs font-bold text-stone-900 truncate">
-                            {item.patients?.full_name}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-stone-500 flex items-center gap-2">
-                          <span>{item.patients?.gender}</span>
-                          <span>•</span>
-                          <span>Age: {getPatientAge(item.patients?.date_of_birth)}</span>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 text-right space-y-1">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
-                          item.urgency_level === 'Emergency'
-                            ? 'bg-rose-100 text-rose-800 border-rose-300'
-                            : item.urgency_level === 'Priority'
-                            ? 'bg-amber-100 text-amber-800 border-amber-300'
-                            : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                        }`}>
-                          {item.urgency_level}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
-        </div>
 
-        {/* RIGHT COLUMN: CONSULTATION WORKSPACE */}
-        <div className="lg:col-span-8 space-y-6">
-          {completedRxId ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-8 text-center space-y-5">
-              <div className="w-14 h-14 bg-emerald-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
-                <CheckCircle2 className="w-8 h-8 text-emerald-200" />
-              </div>
-              <div className="space-y-1">
-                <h2 className="text-xl font-bold text-emerald-950">Consultation Completed!</h2>
-                <p className="text-xs text-emerald-800 max-w-md mx-auto">
-                  Prescription generated for <strong className="text-stone-900">{completedPatientName}</strong>. You can now collect payment or view the prescription slip.
-                </p>
-              </div>
+          {/* RIGHT COL: QUEUE LIST */}
+          <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+            <h3 className="text-lg font-extrabold text-slate-900 border-b border-slate-100 pb-3">
+              Upcoming Queue
+            </h3>
 
-              {/* PAYMENT & PRESCRIPTION BUTTONS */}
-              <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-                <button
-                  onClick={() => setShowPaymentModal(true)}
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <QrCode className="w-4 h-4" />
-                  <span>Show UPI QR Code (₹100 Fee)</span>
-                </button>
-
-                <a
-                  href={`/prescription/${completedRxId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-5 py-2.5 bg-[#0B4632] hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <FileText className="w-4 h-4 text-emerald-300" />
-                  <span>View & Print Prescription Slip</span>
-                </a>
+            {/* QUEUE ITEMS */}
+            <div className="space-y-3">
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center">
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">#13 • Priya Patel</div>
+                  <div className="text-xs text-slate-500 font-medium">Age 34 • Priority Triage</div>
+                </div>
+                <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded">Next</span>
               </div>
 
-              <div className="pt-3 border-t border-emerald-200">
-                <button
-                  onClick={() => {
-                    setCompletedRxId(null);
-                    setSelectedPatient(null);
-                  }}
-                  className="px-6 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl transition cursor-pointer"
-                >
-                  Examine Next Patient
-                </button>
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center">
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">#14 • Amit Verma</div>
+                  <div className="text-xs text-slate-500 font-medium">Age 52 • Normal</div>
+                </div>
+                <span className="text-xs font-bold text-slate-600 bg-slate-200 px-2 py-1 rounded">Waiting</span>
+              </div>
+
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center">
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">#15 • Sneha Gupta</div>
+                  <div className="text-xs text-slate-500 font-medium">Age 22 • Normal</div>
+                </div>
+                <span className="text-xs font-bold text-slate-600 bg-slate-200 px-2 py-1 rounded">Waiting</span>
               </div>
             </div>
-          ) : selectedPatient ? (
-            <form onSubmit={handleSubmitConsultation} className="space-y-6">
-              {/* PATIENT CHART CARD */}
-              <div className="bg-white rounded-3xl p-6 border border-stone-200/90 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center font-mono font-bold text-lg">
-                      #{String(selectedPatient.token_number).padStart(2, '0')}
-                    </div>
-                    <div>
-                      <h2 className="text-base font-bold text-stone-900">{selectedPatient.patients?.full_name}</h2>
-                      <p className="text-xs text-stone-500">
-                        {selectedPatient.patients?.gender} • Age: {getPatientAge(selectedPatient.patients?.date_of_birth)} • Phone: {selectedPatient.patients?.phone}
-                      </p>
-                    </div>
-                  </div>
+          </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={fetchPatientHistory}
-                      className="px-3.5 py-1.5 bg-[#0B4632] hover:bg-emerald-900 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <History className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Medical History</span>
-                    </button>
-
-                    <span className="px-3 py-1 bg-amber-50 text-amber-800 text-xs font-bold rounded-full border border-amber-200">
-                      Allergies: {selectedPatient.patients?.allergies || 'None'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* DIAGNOSIS INPUTS WITH PLACEHOLDER */}
-                <div className="space-y-3 pt-2">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
-                      Chief Symptoms / Recorded Complaint
-                    </label>
-
-                    <div className="relative">
-                      <textarea
-                        rows={2}
-                        placeholder="General Malaise / Regular Checkup"
-                        value={clinicalSymptoms}
-                        onChange={(e) => setClinicalSymptoms(e.target.value)}
-                        className="w-full pl-3.5 pr-10 py-2 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:border-[#0B4632]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => toggleVoiceScribe('symptoms')}
-                        className={`absolute right-3 top-3 p-1.5 rounded-lg transition cursor-pointer ${
-                          isListeningSymptoms
-                            ? 'bg-rose-600 text-white animate-pulse'
-                            : 'text-stone-500 hover:text-[#0B4632] hover:bg-stone-200'
-                        }`}
-                        title="Dictate Symptoms"
-                      >
-                        {isListeningSymptoms ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-stone-700 uppercase tracking-wider">
-                      Doctor's Clinical Diagnosis *
-                    </label>
-
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Acute Allergic Rhinitis / Hyperacidity"
-                        value={clinicalDiagnosis}
-                        onChange={(e) => setClinicalDiagnosis(e.target.value)}
-                        className="w-full pl-3.5 pr-10 py-2.5 bg-[#F6F4EE] border border-stone-200 rounded-xl text-xs sm:text-sm font-bold text-stone-900 focus:outline-none focus:border-[#0B4632]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => toggleVoiceScribe('diagnosis')}
-                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition cursor-pointer ${
-                          isListeningDiagnosis
-                            ? 'bg-rose-600 text-white animate-pulse'
-                            : 'text-stone-500 hover:text-[#0B4632] hover:bg-stone-200'
-                        }`}
-                        title="Dictate Diagnosis"
-                      >
-                        {isListeningDiagnosis ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* DYNAMIC RX PRESCRIPTION BUILDER */}
-              <div className="bg-white rounded-3xl p-6 border border-stone-200/90 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
-                    <Pill className="w-4 h-4 text-[#0B4632]" />
-                    Prescription (Rx) Medication Builder
-                  </span>
-                  <button
-                    type="button"
-                    onClick={addMedicineRow}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200 transition cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add Medicine Row
-                  </button>
-                </div>
-
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">
-                    Quick-Tap Medicine Presets:
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {quickChips.map((chip, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => applyQuickChip(chip)}
-                        className="px-2.5 py-1 bg-[#F6F4EE] hover:bg-stone-200 text-stone-700 text-[11px] font-semibold rounded-lg border border-stone-200 transition cursor-pointer"
-                      >
-                        + {chip.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  {medicines.map((med, index) => (
-                    <div key={index} className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 space-y-2 relative">
-                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                        <div className="sm:col-span-4">
-                          <input
-                            type="text"
-                            placeholder="Medicine Name"
-                            value={med.name}
-                            onChange={(e) => {
-                              const updated = [...medicines];
-                              updated[index].name = e.target.value;
-                              setMedicines(updated);
-                            }}
-                            className="w-full px-3 py-1.5 bg-white border border-stone-300 rounded-xl text-xs font-bold text-stone-900 focus:outline-none"
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <input
-                            type="text"
-                            placeholder="Dosage"
-                            value={med.dosage}
-                            onChange={(e) => {
-                              const updated = [...medicines];
-                              updated[index].dosage = e.target.value;
-                              setMedicines(updated);
-                            }}
-                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-xl text-xs text-stone-900 focus:outline-none"
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <input
-                            type="text"
-                            placeholder="Frequency"
-                            value={med.frequency}
-                            onChange={(e) => {
-                              const updated = [...medicines];
-                              updated[index].frequency = e.target.value;
-                              setMedicines(updated);
-                            }}
-                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-xl text-xs text-stone-900 focus:outline-none"
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <input
-                            type="text"
-                            placeholder="Duration"
-                            value={med.duration}
-                            onChange={(e) => {
-                              const updated = [...medicines];
-                              updated[index].duration = e.target.value;
-                              setMedicines(updated);
-                            }}
-                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-xl text-xs text-stone-900 focus:outline-none"
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2 flex items-center gap-1">
-                          <input
-                            type="text"
-                            placeholder="Instructions"
-                            value={med.instructions}
-                            onChange={(e) => {
-                              const updated = [...medicines];
-                              updated[index].instructions = e.target.value;
-                              setMedicines(updated);
-                            }}
-                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-xl text-xs text-stone-900 focus:outline-none"
-                          />
-
-                          {medicines.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeMedicineRow(index)}
-                              className="p-1.5 text-rose-600 hover:bg-rose-100 rounded-lg transition"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-4 bg-[#0B4632] hover:bg-emerald-900 active:scale-[0.99] text-white font-semibold rounded-2xl text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-4"
-                >
-                  {loading ? (
-                    <span>Finalizing Clinical Record...</span>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>Complete Consultation & Generate Rx & Payment QR</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          ) : null}
         </div>
+
       </div>
-
-      {/* UPI PAYMENT MODAL */}
-      {showPaymentModal && (
-        <UpiPaymentModal
-          isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          patientName={completedPatientName}
-          tokenNumber={completedTokenNumber}
-          consultationFee={100}
-        />
-      )}
-
-      {/* PAST HISTORY MODAL */}
-      {showHistoryModal && (
-        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
-            <div className="p-5 bg-[#0B4632] text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <History className="w-5 h-5 text-amber-300" />
-                <h3 className="font-bold text-sm">
-                  Medical History: {selectedPatient?.patients?.full_name}
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowHistoryModal(false)}
-                className="p-1 hover:bg-emerald-900 rounded-lg transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
-              {historyLoading ? (
-                <div className="py-12 text-center text-xs font-bold text-stone-500 animate-pulse">
-                  Loading patient consultations history...
-                </div>
-              ) : pastConsultations.length === 0 ? (
-                <div className="py-12 text-center space-y-2 text-stone-400">
-                  <Calendar className="w-8 h-8 mx-auto" />
-                  <p className="text-xs font-bold">No past consultations found for this patient.</p>
-                </div>
-              ) : (
-                pastConsultations.map((item) => (
-                  <div key={item.id} className="p-4 rounded-2xl bg-[#F6F4EE] border border-stone-200 space-y-3">
-                    <div className="flex items-center justify-between text-xs border-b border-stone-200 pb-2">
-                      <span className="font-bold text-[#0B4632]">
-                        {new Date(item.created_at).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold uppercase text-amber-700 block">Diagnosis</span>
-                      <p className="text-xs font-bold text-stone-900">{item.diagnosis}</p>
-                    </div>
-
-                    {item.prescriptions?.length > 0 && item.prescriptions[0].prescription_items?.length > 0 && (
-                      <div className="space-y-1 pt-1 border-t border-stone-200/60">
-                        <span className="text-[10px] font-bold uppercase text-stone-500 block">Prescribed Medicines</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {item.prescriptions[0].prescription_items.map((m, idx) => (
-                            <span key={idx} className="px-2 py-0.5 bg-white text-stone-800 text-[10px] font-semibold rounded-md border border-stone-200">
-                              {m.medicine_name} ({m.dosage} - {m.frequency})
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
