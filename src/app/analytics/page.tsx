@@ -1,275 +1,185 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  Users, 
-  Clock, 
-  CheckCircle2, 
-  AlertTriangle, 
-  ShieldAlert, 
-  Activity, 
-  Calendar,
-  ArrowLeft,
-  RefreshCw,
-  PieChart,
-  Stethoscope
-} from 'lucide-react';
 
-interface AnalyticsData {
-  totalAppointments: number;
-  completedAppointments: number;
-  pendingAppointments: number;
-  checkedInAppointments: number;
-  normalUrgencyCount: number;
-  priorityUrgencyCount: number;
-  emergencyUrgencyCount: number;
-  totalPrescriptions: number;
-}
-
-export default function AnalyticsDashboardPage() {
-  const [loading, setLoading] = useState(true);
-  const [metrics, setMetrics] = useState<AnalyticsData>({
-    totalAppointments: 0,
-    completedAppointments: 0,
-    pendingAppointments: 0,
-    checkedInAppointments: 0,
-    normalUrgencyCount: 0,
-    priorityUrgencyCount: 0,
-    emergencyUrgencyCount: 0,
-    totalPrescriptions: 0,
-  });
-
-  const fetchAnalytics = async () => {
-    setLoading(true);
-
-    try {
-      // 1. Fetch Appointments Data
-      const { data: appointments, error: appError } = await supabase
-        .from('appointments')
-        .select('*');
-
-      // 2. Fetch Prescriptions Data
-      const { data: prescriptions, error: rxError } = await supabase
-        .from('prescriptions')
-        .select('id');
-
-      if (!appError && appointments) {
-        const total = appointments.length;
-        const completed = appointments.filter(a => a.status === 'Completed').length;
-        const pending = appointments.filter(a => a.status === 'Pending').length;
-        const checkedIn = appointments.filter(a => a.status === 'Checked-In' || a.status === 'In-Consultation').length;
-
-        const normal = appointments.filter(a => a.urgency_level === 'Normal').length;
-        const priority = appointments.filter(a => a.urgency_level === 'Priority').length;
-        const emergency = appointments.filter(a => a.urgency_level === 'Emergency').length;
-
-        setMetrics({
-          totalAppointments: total,
-          completedAppointments: completed,
-          pendingAppointments: pending,
-          checkedInAppointments: checkedIn,
-          normalUrgencyCount: normal,
-          priorityUrgencyCount: priority,
-          emergencyUrgencyCount: emergency,
-          totalPrescriptions: prescriptions?.length || 0,
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching analytics:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAnalytics();
-  }, []);
-
-  const completionRate = metrics.totalAppointments > 0
-    ? Math.round((metrics.completedAppointments / metrics.totalAppointments) * 100)
-    : 0;
-
+export default function AnalyticsPage() {
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-16 font-sans">
-      {/* HEADER STRIP */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-stone-200/90 shadow-xs">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-[#0B4632] flex items-center justify-center text-white shadow-md">
-            <BarChart3 className="w-6 h-6 text-emerald-200" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-stone-900">OPD & Triage Analytics Dashboard</h1>
-            <p className="text-xs text-stone-500">Dhanwantri Clinic • Outpatient Insights & Throughput</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchAnalytics}
-            className="p-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl transition cursor-pointer"
-            title="Refresh Metrics"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#0B4632]' : ''}`} />
-          </button>
-
-          <Link
-            href="/reception"
-            className="px-4 py-2.5 bg-[#0B4632] hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Reception Desk</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* KEY PERFORMANCE INDICATORS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-3xl border border-stone-200/90 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-400">Total Tokens</span>
-            <div className="w-9 h-9 rounded-xl bg-stone-100 flex items-center justify-center text-stone-700">
-              <Users className="w-4 h-4" />
+    <div className="min-h-screen bg-slate-100 text-slate-900 pt-8 pb-16 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* HEADER CARD */}
+        <div className="bg-[#FFFDF9] border-2 border-emerald-200/80 rounded-3xl p-8 shadow-xl shadow-emerald-950/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 font-extrabold text-3xl shrink-0">
+              📊
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                OPD &amp; Triage Analytics Dashboard
+              </h1>
+              <p className="text-slate-600 font-semibold text-base mt-1">
+                Dhanwantri Clinic • Real-time Outpatient Insights &amp; Operational Throughput
+              </p>
             </div>
           </div>
-          <div>
-            <span className="text-3xl font-black text-stone-900">{metrics.totalAppointments}</span>
-            <p className="text-[11px] text-stone-500 mt-1">Total appointments booked</p>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="p-3 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition shadow-sm text-slate-700 font-bold text-sm"
+              title="Refresh Data"
+            >
+              🔄
+            </button>
+            <Link
+              href="/reception"
+              className="bg-emerald-800 hover:bg-emerald-700 text-white font-black px-6 py-3.5 rounded-xl transition shadow-md flex items-center gap-2 text-sm tracking-wide"
+            >
+              <span>← Reception Desk</span>
+            </Link>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-emerald-200/90 shadow-xs space-y-3 bg-emerald-50/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">Completion Rate</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-800">
-              <CheckCircle2 className="w-4 h-4" />
+        {/* TOP METRICS GRID (LARGER FONT & NUMBERS) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          
+          {/* TOTAL TOKENS */}
+          <div className="bg-white border-2 border-slate-200 p-6 rounded-3xl shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                Total Tokens
+              </span>
+              <span className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 text-lg font-bold">
+                👥
+              </span>
             </div>
+            <div className="text-4xl font-black text-slate-900 tracking-tight pt-1">0</div>
+            <p className="text-xs font-bold text-slate-500">Total appointments booked today</p>
           </div>
-          <div>
-            <span className="text-3xl font-black text-emerald-900">{completionRate}%</span>
-            <p className="text-[11px] text-emerald-700 mt-1">{metrics.completedAppointments} consultations done</p>
+
+          {/* COMPLETION RATE */}
+          <div className="bg-emerald-50/60 border-2 border-emerald-200 p-6 rounded-3xl shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-emerald-800">
+                Completion Rate
+              </span>
+              <span className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-700 text-lg font-bold">
+                ✓
+              </span>
+            </div>
+            <div className="text-4xl font-black text-emerald-900 tracking-tight pt-1">0%</div>
+            <p className="text-xs font-bold text-emerald-700">0 consultations completed</p>
           </div>
+
+          {/* ACTIVE QUEUE */}
+          <div className="bg-amber-50/60 border-2 border-amber-200 p-6 rounded-3xl shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-amber-900">
+                Active Queue
+              </span>
+              <span className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 text-lg font-bold">
+                ⏱️
+              </span>
+            </div>
+            <div className="text-4xl font-black text-amber-900 tracking-tight pt-1">0</div>
+            <p className="text-xs font-bold text-amber-800">Currently in waiting area</p>
+          </div>
+
+          {/* PRESCRIPTIONS ISSUED */}
+          <div className="bg-sky-50/60 border-2 border-sky-200 p-6 rounded-3xl shadow-sm space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase tracking-wider text-sky-900">
+                Prescriptions Issued
+              </span>
+              <span className="w-10 h-10 rounded-xl bg-sky-100 border border-sky-300 flex items-center justify-center text-sky-700 text-lg font-bold">
+                💊
+              </span>
+            </div>
+            <div className="text-4xl font-black text-sky-900 tracking-tight pt-1">0</div>
+            <p className="text-xs font-bold text-sky-800">Digital Rx slips generated</p>
+          </div>
+
         </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-amber-200/90 shadow-xs space-y-3 bg-amber-50/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-800">Active Queue</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800">
-              <Clock className="w-4 h-4" />
+        {/* DETAILED DATA SECTION */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* TRIAGE URGENCY BREAKDOWN */}
+          <div className="bg-white border-2 border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <span>⏱️</span>
+                <span>Triage Urgency Breakdown</span>
+              </h2>
+              <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                Total: 0
+              </span>
             </div>
-          </div>
-          <div>
-            <span className="text-3xl font-black text-amber-900">{metrics.checkedInAppointments}</span>
-            <p className="text-[11px] text-amber-700 mt-1">Currently in waiting area</p>
-          </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-stone-200/90 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-stone-400">Prescriptions Issued</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800">
-              <Stethoscope className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <span className="text-3xl font-black text-stone-900">{metrics.totalPrescriptions}</span>
-            <p className="text-[11px] text-stone-500 mt-1">Digital Rx slips generated</p>
-          </div>
-        </div>
-      </div>
-
-      {/* DETAILED BREAKDOWN CARDS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* TRIAGE URGENCY DISTRIBUTION */}
-        <div className="bg-white rounded-3xl p-6 border border-stone-200/90 shadow-xs space-y-5">
-          <div className="flex items-center justify-between border-b border-stone-100 pb-4">
-            <div className="flex items-center gap-2">
-              <PieChart className="w-5 h-5 text-[#0B4632]" />
-              <h2 className="text-base font-bold text-stone-900">Triage Urgency Breakdown</h2>
-            </div>
-            <span className="text-xs font-bold text-stone-400">Total: {metrics.totalAppointments}</span>
-          </div>
-
-          <div className="space-y-4">
-            {/* Normal */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-stone-700">Normal Priority</span>
-                <span className="text-stone-900">{metrics.normalUrgencyCount} Patients</span>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                <span className="font-extrabold text-slate-800 text-base">Normal Priority</span>
+                <span className="font-black text-slate-900 text-base">0 Patients</span>
               </div>
-              <div className="w-full h-3 bg-stone-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-700 transition-all duration-500"
-                  style={{ width: metrics.totalAppointments > 0 ? `${(metrics.normalUrgencyCount / metrics.totalAppointments) * 100}%` : '0%' }}
-                />
-              </div>
-            </div>
 
-            {/* Priority */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-amber-700">Priority Triage</span>
-                <span className="text-amber-900">{metrics.priorityUrgencyCount} Patients</span>
+              <div className="flex justify-between items-center p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                <span className="font-extrabold text-amber-900 text-base">Priority Triage</span>
+                <span className="font-black text-amber-950 text-base">0 Patients</span>
               </div>
-              <div className="w-full h-3 bg-stone-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-amber-500 transition-all duration-500"
-                  style={{ width: metrics.totalAppointments > 0 ? `${(metrics.priorityUrgencyCount / metrics.totalAppointments) * 100}%` : '0%' }}
-                />
-              </div>
-            </div>
 
-            {/* Emergency */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-rose-700">Emergency Cases</span>
-                <span className="text-rose-900">{metrics.emergencyUrgencyCount} Patients</span>
-              </div>
-              <div className="w-full h-3 bg-stone-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-rose-600 transition-all duration-500"
-                  style={{ width: metrics.totalAppointments > 0 ? `${(metrics.emergencyUrgencyCount / metrics.totalAppointments) * 100}%` : '0%' }}
-                />
+              <div className="flex justify-between items-center p-4 bg-rose-50 border border-rose-200 rounded-2xl">
+                <span className="font-extrabold text-rose-900 text-base">Emergency Cases</span>
+                <span className="font-black text-rose-950 text-base">0 Patients</span>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* WORKFLOW STATUS SUMMARY */}
-        <div className="bg-white rounded-3xl p-6 border border-stone-200/90 shadow-xs space-y-5">
-          <div className="flex items-center justify-between border-b border-stone-100 pb-4">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-[#0B4632]" />
-              <h2 className="text-base font-bold text-stone-900">OPD Queue Stage Distribution</h2>
+          {/* OPD QUEUE STAGE DISTRIBUTION */}
+          <div className="bg-white border-2 border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <span>📈</span>
+                <span>OPD Queue Stage Distribution</span>
+              </h2>
+              <span className="text-xs font-black text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full uppercase tracking-wider">
+                Real-time Sync
+              </span>
             </div>
-            <span className="text-xs font-bold text-stone-400">Real-time Sync</span>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-5 bg-amber-50/80 border border-amber-200 rounded-2xl text-center space-y-1">
+                <div className="text-xs font-black text-amber-900 uppercase tracking-wider">
+                  Pending Arrival
+                </div>
+                <div className="text-3xl font-black text-amber-950">0</div>
+              </div>
+
+              <div className="p-5 bg-sky-50/80 border border-sky-200 rounded-2xl text-center space-y-1">
+                <div className="text-xs font-black text-sky-900 uppercase tracking-wider">
+                  Checked In / Waiting
+                </div>
+                <div className="text-3xl font-black text-sky-950">0</div>
+              </div>
+
+              <div className="p-5 bg-emerald-50/80 border border-emerald-200 rounded-2xl text-center space-y-1">
+                <div className="text-xs font-black text-emerald-900 uppercase tracking-wider">
+                  Consultation Done
+                </div>
+                <div className="text-3xl font-black text-emerald-950">0</div>
+              </div>
+
+              <div className="p-5 bg-purple-50/80 border border-purple-200 rounded-2xl text-center space-y-1">
+                <div className="text-xs font-black text-purple-900 uppercase tracking-wider">
+                  Prescriptions Issued
+                </div>
+                <div className="text-3xl font-black text-purple-950">0</div>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-2xl bg-[#F6F4EE] border border-stone-200 space-y-1">
-              <span className="text-[10px] font-bold uppercase text-stone-500">Pending Arrival</span>
-              <span className="text-2xl font-black text-stone-900 block">{metrics.pendingAppointments}</span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-1">
-              <span className="text-[10px] font-bold uppercase text-emerald-800">Checked In / Waiting</span>
-              <span className="text-2xl font-black text-emerald-900 block">{metrics.checkedInAppointments}</span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-emerald-100/60 border border-emerald-300 space-y-1">
-              <span className="text-[10px] font-bold uppercase text-emerald-900">Consultation Done</span>
-              <span className="text-2xl font-black text-emerald-950 block">{metrics.completedAppointments}</span>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-1">
-              <span className="text-[10px] font-bold uppercase text-amber-800">Prescriptions Issued</span>
-              <span className="text-2xl font-black text-amber-900 block">{metrics.totalPrescriptions}</span>
-            </div>
-          </div>
         </div>
+
       </div>
     </div>
   );
