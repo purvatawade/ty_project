@@ -10,7 +10,7 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
 
-  // Helper function to check if link is active
+  // Helper function to check active path
   const isActive = (path: string) => pathname === path;
 
   return (
@@ -35,7 +35,7 @@ export default function Navbar() {
         {/* NAVIGATION LINKS */}
         <nav className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm font-bold">
           
-          {/* PUBLIC / PATIENT LINKS */}
+          {/* PUBLIC & PATIENT ACCESSIBLE ROUTES */}
           <Link
             href="/"
             className={`px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-1.5 ${
@@ -45,6 +45,17 @@ export default function Navbar() {
             }`}
           >
             <span>Book OPD Slot</span>
+          </Link>
+
+          <Link
+            href="/patient-queue"
+            className={`px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-1.5 ${
+              isActive('/patient-queue')
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                : 'text-slate-200 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <span>Live Queue Tracker</span>
           </Link>
 
           <Link
