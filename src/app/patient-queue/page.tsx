@@ -4,14 +4,15 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
+import { useQueue } from '@/lib/QueueContext';
 
 export default function PatientQueuePage() {
   const { user } = useAuth();
+  const { tokens, activeToken } = useQueue();
   const router = useRouter();
 
   const [searchToken, setSearchToken] = useState('15');
-  const [patientToken, setPatientToken] = useState<number | null>(15);
-  const [patientName, setPatientName] = useState('Rahul Sharma');
+  const [patientTokenNum, setPatientTokenNum] = useState<number | null>(15);
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -19,39 +20,36 @@ export default function PatientQueuePage() {
       return;
     }
 
-    // Auto-detect last generated token from session storage
     const activePass = localStorage.getItem('last_opd_token');
     if (activePass) {
       try {
         const parsed = JSON.parse(activePass);
         if (parsed.token) {
-          setPatientToken(parsed.token);
+          setPatientTokenNum(parsed.token);
           setSearchToken(String(parsed.token));
-          setPatientName(parsed.name || 'Registered Patient');
         }
-      } catch {
-        // Fallback to default
-      }
+      } catch {}
     }
   }, [user, router]);
 
-  const currentCallingToken = 12;
-  const estimatedTimePerPatient = 10;
+  const currentCallingToken = activeToken ? activeToken.tokenNumber : 0;
+  const userTokenObj = tokens.find((t) => t.tokenNumber === patientTokenNum) || null;
 
-  const tokensAhead = patientToken ? Math.max(0, patientToken - currentCallingToken) : 0;
-  const estimatedWaitMinutes = tokensAhead * estimatedTimePerPatient;
+  const waitingAheadCount = tokens.filter(
+    (t) => t.stage === 'Waiting' && t.tokenNumber < (patientTokenNum || 0)
+  ).length;
+
+  const estimatedWaitMinutes = waitingAheadCount * 10;
 
   const handleTrackToken = (e: React.FormEvent) => {
     e.preventDefault();
     const num = parseInt(searchToken.replace(/\D/g, ''), 10);
     if (!isNaN(num)) {
-      setPatientToken(num);
+      setPatientTokenNum(num);
     }
   };
 
-  if (user?.role === 'admin') {
-    return null;
-  }
+  if (user?.role === 'admin') return null;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 pt-8 pb-16 px-4 sm:px-6 lg:px-8">
@@ -89,13 +87,13 @@ export default function PatientQueuePage() {
           <form onSubmit={handleTrackToken} className="flex flex-col sm:flex-row items-center gap-4">
             <div className="flex-1 w-full">
               <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1.5">
-                Enter Your OPD Token Number or Registered Phone
+                Enter Your OPD Token Number
               </label>
               <input
                 type="text"
                 value={searchToken}
                 onChange={(e) => setSearchToken(e.target.value)}
-                placeholder="e.g. 15 or 9820098200"
+                placeholder="e.g. 15"
                 className="w-full bg-white border border-slate-300 text-slate-900 font-bold px-4 py-3 rounded-xl focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 text-base shadow-sm"
               />
             </div>
@@ -108,16 +106,15 @@ export default function PatientQueuePage() {
           </form>
         </div>
 
-        {/* LIVE TURN METRICS GRID */}
-        {patientToken && (
+        {/* METRICS */}
+        {patientTokenNum && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
             <div className="bg-emerald-50/80 border-2 border-emerald-300 p-8 rounded-3xl shadow-sm text-center space-y-2">
               <span className="text-xs font-black uppercase tracking-widest text-emerald-800">
                 NOW IN CABIN
               </span>
               <div className="text-5xl font-black text-emerald-900 pt-2">
-                #{currentCallingToken}
+                {currentCallingToken ? `#${currentCallingToken}` : 'Vacant'}
               </div>
               <p className="text-xs font-bold text-emerald-700">Dr. Sarika B. Singh</p>
             </div>
@@ -127,9 +124,11 @@ export default function PatientQueuePage() {
                 YOUR TOKEN PASS
               </span>
               <div className="text-5xl font-black text-slate-900 pt-2">
-                #{patientToken}
+                #{patientTokenNum}
               </div>
-              <p className="text-xs font-bold text-slate-600">{patientName}</p>
+              <p className="text-xs font-bold text-slate-600">
+                {userTokenObj?.fullName || 'Registered Patient'}
+              </p>
             </div>
 
             <div className="bg-amber-50/80 border-2 border-amber-300 p-8 rounded-3xl shadow-sm text-center space-y-2">
@@ -140,14 +139,13 @@ export default function PatientQueuePage() {
                 ~{estimatedWaitMinutes} Mins
               </div>
               <p className="text-xs font-bold text-amber-800">
-                {tokensAhead} Patients ahead of you
+                {waitingAheadCount} Patients ahead of you
               </p>
             </div>
-
           </div>
         )}
 
-        {/* VISUAL QUEUE PROGRESS CARD */}
+        {/* VISUAL QUEUE */}
         <div className="bg-white border-2 border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
           <div className="flex justify-between items-center pb-4 border-b border-slate-200">
             <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
@@ -160,65 +158,42 @@ export default function PatientQueuePage() {
           </div>
 
           <div className="space-y-4">
-            <div className="p-4 bg-emerald-50 border-2 border-emerald-500 rounded-2xl flex justify-between items-center shadow-sm">
-              <div className="flex items-center gap-4">
-                <span className="w-10 h-10 rounded-xl bg-emerald-700 text-white font-black flex items-center justify-center text-sm">
-                  #12
-                </span>
-                <div>
-                  <div className="font-extrabold text-slate-900 text-base">Current Patient In Room</div>
-                  <div className="text-xs font-semibold text-emerald-800">Consultation in progress</div>
+            {tokens.map((t) => (
+              <div
+                key={t.id}
+                className={`p-4 rounded-2xl flex justify-between items-center border ${
+                  t.tokenNumber === patientTokenNum
+                    ? 'bg-[#FFFDF9] border-2 border-emerald-400 shadow-md'
+                    : t.stage === 'In Room'
+                    ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <span className={`w-10 h-10 rounded-xl font-black flex items-center justify-center text-sm ${
+                    t.stage === 'In Room' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-800'
+                  }`}>
+                    #{t.tokenNumber}
+                  </span>
+                  <div>
+                    <div className="font-extrabold text-slate-900 text-base">{t.fullName}</div>
+                    <div className="text-xs font-semibold text-slate-500">
+                      {t.stage === 'In Room' ? 'In Doctor Room' : `Status: ${t.stage}`}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <span className="px-3 py-1 bg-emerald-700 text-white font-black text-xs rounded-lg animate-pulse">
-                IN ROOM
-              </span>
-            </div>
 
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <span className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 font-extrabold flex items-center justify-center text-sm">
-                  #13
+                <span className={`px-3 py-1 font-bold text-xs rounded-lg ${
+                  t.stage === 'In Room'
+                    ? 'bg-emerald-700 text-white animate-pulse'
+                    : t.stage === 'Consulted'
+                    ? 'bg-slate-200 text-slate-700'
+                    : 'bg-amber-100 text-amber-900'
+                }`}>
+                  {t.stage === 'In Room' ? 'IN ROOM' : t.stage}
                 </span>
-                <div>
-                  <div className="font-extrabold text-slate-900 text-base">Next Turn</div>
-                  <div className="text-xs font-semibold text-slate-500">Waiting in Reception</div>
-                </div>
               </div>
-              <span className="px-3 py-1 bg-amber-100 text-amber-900 font-bold text-xs rounded-lg">
-                1st Ahead
-              </span>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <span className="w-10 h-10 rounded-xl bg-slate-200 text-slate-800 font-extrabold flex items-center justify-center text-sm">
-                  #14
-                </span>
-                <div>
-                  <div className="font-extrabold text-slate-900 text-base">Upcoming Token</div>
-                  <div className="text-xs font-semibold text-slate-500">Waiting in Reception</div>
-                </div>
-              </div>
-              <span className="px-3 py-1 bg-slate-200 text-slate-700 font-bold text-xs rounded-lg">
-                2nd Ahead
-              </span>
-            </div>
-
-            <div className="p-4 bg-[#FFFDF9] border-2 border-emerald-400 rounded-2xl flex justify-between items-center shadow-md">
-              <div className="flex items-center gap-4">
-                <span className="w-10 h-10 rounded-xl bg-emerald-800 text-white font-black flex items-center justify-center text-sm">
-                  #{patientToken || 15}
-                </span>
-                <div>
-                  <div className="font-black text-slate-900 text-base">Your Turn Pass ({patientName})</div>
-                  <div className="text-xs font-bold text-emerald-800">You are {tokensAhead} ahead in line</div>
-                </div>
-              </div>
-              <span className="px-3 py-1 bg-emerald-800 text-white font-black text-xs rounded-lg">
-                YOUR TURN NEXT
-              </span>
-            </div>
+            ))}
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { AuthProvider } from '@/lib/AuthContext';
+import { QueueProvider } from '@/lib/QueueContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import '@/app/globals.css';
@@ -25,9 +26,11 @@ export default function RootLayout({
     <html lang="en" className={jakarta.variable}>
       <body className="font-sans bg-slate-100 text-slate-900 min-h-screen flex flex-col justify-between antialiased">
         <AuthProvider>
-          <Navbar />
-          <main className="flex-grow">{children}</main>
-          <Footer />
+          <QueueProvider>
+            <Navbar />
+            <main className="flex-grow">{children}</main>
+            <Footer />
+          </QueueProvider>
         </AuthProvider>
       </body>
     </html>
