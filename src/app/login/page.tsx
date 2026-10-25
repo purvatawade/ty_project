@@ -1,64 +1,66 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useAuth, UserRole } from '@/lib/AuthContext';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const [roleTab, setRoleTab] = useState<UserRole>('client');
-  const [username, setUsername] = useState('');
+  const [role, setRole] = useState<'patient' | 'doctor'>('patient');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const router = useRouter();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Role-based authentication logic
-    if (roleTab === 'admin' && username === 'doctor' && password === 'admin123') {
-      login({ id: 'ADM-01', name: 'Dr. Sharma', role: 'admin' });
-    } else if (roleTab === 'client' && username && password) {
-      login({ id: 'PAT-01', name: username, role: 'client' });
-    } else if (roleTab === 'admin') {
-      setError('Invalid Doctor credentials. (Demo login: doctor / admin123)');
+    if (!identifier || !password) {
+      setError('Please fill in all fields.');
+      return;
+    }
+
+    // Store user login session
+    localStorage.setItem('isLoggedIn', 'true');
+    localStorage.setItem('userRole', role);
+
+    // Redirect based on role
+    if (role === 'doctor') {
+      router.push('/doctor');
     } else {
-      setError('Please enter valid Patient login details.');
+      router.push('/');
     }
   };
 
   return (
-    <div className="flex items-center justify-center py-16 px-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 w-full max-w-md shadow-2xl">
-        <h1 className="text-2xl font-bold text-center text-white mb-6">
+    <div className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-slate-50/50 px-4">
+      {/* Perfectly Centered Light Cream Container */}
+      <div className="w-full max-w-md rounded-2xl bg-[#FDFBF7] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.12)] border border-amber-200/60 ring-1 ring-black/5">
+        
+        {/* Header Title */}
+        <h1 className="mb-6 text-center text-2xl font-bold tracking-tight text-slate-800">
           ArogyaSetu Access Portal
         </h1>
 
-        {/* ROLE SELECTION TABS */}
-        <div className="grid grid-cols-2 gap-2 bg-slate-800 p-1 rounded-lg mb-6">
+        {/* Tab Switcher */}
+        <div className="mb-6 flex rounded-xl bg-[#F5F1E8] p-1 border border-amber-100">
           <button
             type="button"
-            onClick={() => {
-              setRoleTab('client');
-              setError('');
-            }}
-            className={`py-2 text-sm font-semibold rounded-md transition ${
-              roleTab === 'client'
-                ? 'bg-sky-600 text-white'
-                : 'text-slate-400 hover:text-white'
+            onClick={() => { setRole('patient'); setError(''); }}
+            className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-all ${
+              role === 'patient'
+                ? 'bg-[#005f42] text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Patient Login
           </button>
           <button
             type="button"
-            onClick={() => {
-              setRoleTab('admin');
-              setError('');
-            }}
-            className={`py-2 text-sm font-semibold rounded-md transition ${
-              roleTab === 'admin'
-                ? 'bg-emerald-600 text-white'
-                : 'text-slate-400 hover:text-white'
+            onClick={() => { setRole('doctor'); setError(''); }}
+            className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-all ${
+              role === 'doctor'
+                ? 'bg-[#005f42] text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Doctor / Admin
@@ -66,49 +68,46 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="bg-red-950/80 border border-red-800 text-red-200 text-sm p-3 rounded-lg mb-4">
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600 text-center font-semibold">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        {/* Login Form */}
+        <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              {roleTab === 'admin' ? 'Doctor Username' : 'Patient Mobile / ID'}
+            <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
+              {role === 'patient' ? 'Patient Mobile / ID *' : 'Doctor / Admin ID *'}
             </label>
             <input
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={roleTab === 'admin' ? 'doctor' : 'Enter mobile number'}
-              className="w-full bg-slate-800 border border-slate-700 text-white px-3 py-2 rounded-md focus:outline-none focus:border-sky-500"
               required
+              placeholder={role === 'patient' ? 'e.g. 9820098200' : 'e.g. DOC-102'}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              className="w-full rounded-xl bg-[#F5F1E8] border border-slate-200/80 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-[#005f42] focus:outline-none focus:ring-2 focus:ring-[#005f42]/20 transition-all font-medium"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              Password
+            <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-1.5">
+              Password *
             </label>
             <input
               type="password"
+              required
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-slate-800 border border-slate-700 text-white px-3 py-2 rounded-md focus:outline-none focus:border-sky-500"
-              required
+              className="w-full rounded-xl bg-[#F5F1E8] border border-slate-200/80 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-[#005f42] focus:outline-none focus:ring-2 focus:ring-[#005f42]/20 transition-all font-medium"
             />
           </div>
 
           <button
             type="submit"
-            className={`w-full py-2.5 rounded-md font-bold text-white transition ${
-              roleTab === 'admin'
-                ? 'bg-emerald-600 hover:bg-emerald-500'
-                : 'bg-sky-600 hover:bg-sky-500'
-            }`}
+            className="w-full rounded-xl bg-[#005f42] py-3.5 text-sm font-bold text-white transition-all hover:bg-[#004a33] active:scale-[0.99] shadow-lg hover:shadow-xl"
           >
-            Sign In as {roleTab === 'admin' ? 'Doctor' : 'Patient'}
+            Sign In as {role === 'patient' ? 'Patient' : 'Doctor / Admin'}
           </button>
         </form>
       </div>

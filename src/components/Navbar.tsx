@@ -1,70 +1,99 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { 
-  HeartPulse, 
-  UserPlus, 
-  Users, 
-  Stethoscope, 
-  BarChart3
-} from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  const navLinks = [
-    { href: '/', label: 'Patient Registration', icon: UserPlus },
-    { href: '/reception', label: 'Reception Console', icon: Users },
-    { href: '/doctor', label: 'Doctor Desk', icon: Stethoscope },
-    { href: '/analytics', label: 'OPD Analytics', icon: BarChart3 },
+  useEffect(() => {
+    const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    setIsLoggedIn(loggedIn);
+  }, [pathname]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('userRole');
+    setIsLoggedIn(false);
+    router.push('/login');
+  };
+
+  const navItems = [
+    { name: 'Patient Registration', href: '/', icon: '👤+' },
+    { name: 'Reception Console', href: '/reception', icon: '📋' },
+    { name: 'Doctor Desk', href: '/doctor', icon: '🩺' },
+    { name: 'OPD Analytics', href: '/analytics', icon: '📊' },
   ];
 
   return (
-    <header className="bg-white border-b border-stone-200/90 sticky top-0 z-50 shadow-xs print:hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          
-          {/* LOGO BRANDING */}
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#0B4632] text-white flex items-center justify-center shadow-md">
-              <HeartPulse className="w-5 h-5 text-emerald-300" />
-            </div>
-            <div>
-              <span className="text-lg font-black tracking-tight text-stone-900">
-                Arogya<span className="text-[#0B4632]">Setu</span>
-              </span>
-              <span className="hidden sm:inline-block ml-2 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
-                Dhanwantri Clinic
-              </span>
-            </div>
-          </Link>
-
-          {/* DESKTOP NAVIGATION LINKS */}
-          <nav className="flex items-center gap-1 sm:gap-2">
-            {navLinks.map((link) => {
-              const Icon = link.icon;
-              const isActive = pathname === link.href;
-
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                    isActive
-                      ? 'bg-[#0B4632] text-white shadow-xs'
-                      : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-300' : 'text-stone-500'}`} />
-                  <span className="hidden md:inline">{link.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+    <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200/80 shadow-sm sticky top-0 z-50">
+      {/* Brand Logo */}
+      <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#005f42] text-white font-bold shadow-md transition-transform group-hover:scale-105">
+            <span className="text-xl">🩺</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xl font-extrabold tracking-tight text-slate-800">
+              ArogyaSetu
+            </span>
+            <span className="px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#005f42] bg-[#005f42]/10 rounded-full border border-[#005f42]/20 uppercase">
+              Dhanwantri Clinic
+            </span>
+          </div>
+        </Link>
       </div>
+
+      {/* Navigation Links with Dark Green Text + Bottom Underline */}
+      <nav className="flex items-center gap-6">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href;
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`relative flex items-center gap-2 py-2 text-sm font-bold transition-colors duration-150 ${
+                isActive
+                  ? 'text-[#005f42]'
+                  : 'text-slate-600 hover:text-[#005f42]'
+              }`}
+            >
+              <span>{item.icon}</span>
+              <span>{item.name}</span>
+
+              {/* Dark Green Underline Bar below active text */}
+              {isActive && (
+                <span className="absolute -bottom-4 left-0 right-0 h-[3px] bg-[#005f42] rounded-full" />
+              )}
+            </Link>
+          );
+        })}
+
+        {/* Dedicated Login / Logout Button */}
+        {isLoggedIn ? (
+          <button
+            onClick={handleLogout}
+            className="ml-4 px-4 py-2 text-sm font-bold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            Logout
+          </button>
+        ) : (
+          <Link
+            href="/login"
+            className={`ml-4 px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+              pathname === '/login'
+                ? 'bg-[#005f42] text-white shadow-md ring-2 ring-[#005f42]/30'
+                : 'text-white bg-[#005f42] hover:bg-[#004a33] shadow-sm'
+            }`}
+          >
+            Login
+          </Link>
+        )}
+      </nav>
     </header>
   );
 }
