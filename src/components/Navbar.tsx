@@ -8,24 +8,38 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     const loggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const role = localStorage.getItem('userRole');
     setIsLoggedIn(loggedIn);
+    setUserRole(role);
   }, [pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('userRole');
     setIsLoggedIn(false);
-    router.push('/login');
+    setUserRole(null);
+    router.replace('/login');
   };
 
+  // Hide Navbar completely on the login portal page for a clean look
+  if (pathname === '/login') {
+    return null;
+  }
+
+  // Doctor / Admin see all console views; Patient sees only Patient Registration
   const navItems = [
     { name: 'Patient Registration', href: '/', icon: '👤+' },
-    { name: 'Reception Console', href: '/reception', icon: '📋' },
-    { name: 'Doctor Desk', href: '/doctor', icon: '🩺' },
-    { name: 'OPD Analytics', href: '/analytics', icon: '📊' },
+    ...(userRole === 'doctor'
+      ? [
+          { name: 'Reception Console', href: '/reception', icon: '📋' },
+          { name: 'Doctor Desk', href: '/doctor', icon: '🩺' },
+          { name: 'OPD Analytics', href: '/analytics', icon: '📊' },
+        ]
+      : []),
   ];
 
   return (
@@ -47,7 +61,7 @@ export default function Navbar() {
         </Link>
       </div>
 
-      {/* Navigation Links with Dark Green Text + Bottom Underline */}
+      {/* Navigation Links */}
       <nav className="flex items-center gap-6">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
@@ -65,7 +79,6 @@ export default function Navbar() {
               <span>{item.icon}</span>
               <span>{item.name}</span>
 
-              {/* Dark Green Underline Bar below active text */}
               {isActive && (
                 <span className="absolute -bottom-4 left-0 right-0 h-[3px] bg-[#005f42] rounded-full" />
               )}
@@ -73,25 +86,14 @@ export default function Navbar() {
           );
         })}
 
-        {/* Dedicated Login / Logout Button */}
-        {isLoggedIn ? (
+        {/* Dark Red Logout Button with White Text (No Icon) */}
+        {isLoggedIn && (
           <button
             onClick={handleLogout}
-            className="ml-4 px-4 py-2 text-sm font-bold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+            className="ml-4 px-5 py-2 text-sm font-bold text-white bg-red-700 rounded-xl hover:bg-red-800 transition-colors shadow-sm active:scale-95"
           >
             Logout
           </button>
-        ) : (
-          <Link
-            href="/login"
-            className={`ml-4 px-4 py-2 text-sm font-bold rounded-lg transition-all ${
-              pathname === '/login'
-                ? 'bg-[#005f42] text-white shadow-md ring-2 ring-[#005f42]/30'
-                : 'text-white bg-[#005f42] hover:bg-[#004a33] shadow-sm'
-            }`}
-          >
-            Login
-          </Link>
         )}
       </nav>
     </header>

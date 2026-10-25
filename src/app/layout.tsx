@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Navbar from "@/components/Navbar"; // or wherever your Navbar lives
+import Navbar from "@/components/Navbar";
+import AuthGuard from "@/components/AuthGuard";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,8 +17,9 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased bg-slate-50">
         <Navbar />
-        <main>{children}</main>
-        {/* Footer has been completely removed */}
+        <AuthGuard>
+          <main>{children}</main>
+        </AuthGuard>
       </body>
     </html>
   );
