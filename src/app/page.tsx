@@ -1,5 +1,5 @@
 'use client';
-
+import { addToken } from '@/utils/queueStore';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -125,6 +125,11 @@ export default function PatientRegistrationPage() {
 
       if (appError) throw appError;
 
+      // =========================================================================
+      // SAVE TO SHARED LOCAL QUEUE STORE (dh_patients) SO TOKEN PASS IS SYNCED
+      // =========================================================================
+      addToken(fullName.trim(), cleanPhone, gender, urgencyLevel);
+
       setTokenResult({
         tokenNumber: nextToken,
         patientName: fullName.trim(),
@@ -178,8 +183,8 @@ export default function PatientRegistrationPage() {
             <UserPlus className="w-5 h-5 text-emerald-300" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-stone-900">Get Live OPD Digital Token</h1>
-            <p className="text-xs text-stone-500">Register walk-in patient or book instant OPD turn pass</p>
+            <h1 className="text-lg font-bold text-stone-900">Get Live Digital Token</h1>
+            <p className="text-xs text-stone-500">Register walk-in patient or book instant booking turn pass</p>
           </div>
         </div>
 
@@ -198,7 +203,7 @@ export default function PatientRegistrationPage() {
             </div>
 
             <div className="space-y-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">Your Live OPD Token</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">Your Live Token</span>
               <div className="text-5xl font-black text-[#0B4632] font-mono tracking-tight">
                 #{String(tokenResult.tokenNumber).padStart(2, '0')}
               </div>
@@ -247,10 +252,10 @@ export default function PatientRegistrationPage() {
               </button>
 
               <Link
-                href="/reception"
+                href="/queue"
                 className="px-6 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl transition"
               >
-                View Reception Queue
+                View Live Queue
               </Link>
             </div>
           </div>
@@ -412,7 +417,7 @@ export default function PatientRegistrationPage() {
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 text-emerald-300" />
-                  <span>Generate Digital OPD Token Pass</span>
+                  <span>Generate Digital Token Pass</span>
                 </>
               )}
             </button>

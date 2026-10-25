@@ -102,7 +102,7 @@ export default function AnalyticsDashboardPage() {
             <BarChart3 className="w-6 h-6 text-emerald-200" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-stone-900">OPD & Triage Analytics Dashboard</h1>
+            <h1 className="text-xl font-bold text-stone-900">Analytics Dashboard</h1>
             <p className="text-xs text-stone-500">Dhanwantri Clinic • Outpatient Insights & Throughput</p>
           </div>
         </div>
@@ -243,7 +243,7 @@ export default function AnalyticsDashboardPage() {
           <div className="flex items-center justify-between border-b border-stone-100 pb-4">
             <div className="flex items-center gap-2">
               <Activity className="w-5 h-5 text-[#0B4632]" />
-              <h2 className="text-base font-bold text-stone-900">OPD Queue Stage Distribution</h2>
+              <h2 className="text-base font-bold text-stone-900">Queue Stage Distribution</h2>
             </div>
             <span className="text-xs font-bold text-stone-400">Real-time Sync</span>
           </div>

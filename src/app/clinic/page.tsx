@@ -60,7 +60,7 @@ export default function ClinicLandingPage() {
           {/* OPD STATUS BADGE */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-900/80 border border-emerald-700/60 text-xs font-bold">
             <span className={`w-2.5 h-2.5 rounded-full ${isOpenNow ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-            <span>{isOpenNow ? 'OPD Currently Open • Accepting Walk-ins' : 'OPD Closed Now • Reopens at 11 AM / 7 PM'}</span>
+            <span>{isOpenNow ? 'Booking Currently Open • Accepting Walk-ins' : 'Booking Closed Now • Reopens at 11 AM / 7 PM'}</span>
           </div>
 
           <div className="space-y-2">
@@ -82,7 +82,7 @@ export default function ClinicLandingPage() {
               className="px-6 py-3.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs sm:text-sm rounded-2xl shadow-md transition flex items-center gap-2"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Get OPD Token Pass</span>
+              <span>Get Token Pass</span>
             </Link>
 
             <a
@@ -166,15 +166,15 @@ export default function ClinicLandingPage() {
               <Clock className="w-5 h-5 text-amber-300" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-stone-900">OPD Timings & Hours</h3>
-              <p className="text-xs text-stone-500">Walk-in OPD Sessions</p>
+              <h3 className="text-base font-bold text-stone-900">Timings & Hours</h3>
+              <p className="text-xs text-stone-500">Walk-in Booking Sessions</p>
             </div>
           </div>
 
           <div className="space-y-3 text-xs">
             <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 flex justify-between items-center">
               <div>
-                <strong className="text-stone-900 block">Morning OPD Session</strong>
+                <strong className="text-stone-900 block">Morning Session</strong>
                 <span className="text-stone-500 text-[11px]">Monday to Saturday</span>
               </div>
               <span className="font-mono font-bold text-[#0B4632]">11:00 AM – 02:00 PM</span>
@@ -182,7 +182,7 @@ export default function ClinicLandingPage() {
 
             <div className="p-3 bg-[#F6F4EE] rounded-2xl border border-stone-200 flex justify-between items-center">
               <div>
-                <strong className="text-stone-900 block">Evening OPD Session</strong>
+                <strong className="text-stone-900 block">Evening Session</strong>
                 <span className="text-stone-500 text-[11px]">Monday to Saturday</span>
               </div>
               <span className="font-mono font-bold text-[#0B4632]">07:00 PM – 10:00 PM</span>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import UpiPaymentModal from '@/components/UpiPaymentModal';
+import { getQueue, updateTokenStatus, QueueItem } from '@/utils/queueStore';
 import { 
   Stethoscope, 
   Clock, 
@@ -25,7 +26,7 @@ import {
 } from 'lucide-react';
 
 interface WaitingPatient {
-  id: string; // appointment_id
+  id: string; // appointment_id or token id
   patient_id: string;
   token_number: number;
   urgency_level: 'Normal' | 'Priority' | 'Emergency';
@@ -148,32 +149,76 @@ export default function DoctorWorkspacePage() {
   };
 
   const fetchQueue = async () => {
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
-      .from('appointments')
-      .select('*, patients(*)')
-      .eq('appointment_date', today)
-      .in('status', ['Checked-In', 'In-Consultation'])
-      .order('token_number', { ascending: true });
+    let sortedPatients: WaitingPatient[] = [];
 
-    if (!error && data) {
-      const rank = { Emergency: 1, Priority: 2, Normal: 3 };
-      const sorted = (data as unknown as WaitingPatient[]).sort((a, b) => {
-        if (rank[a.urgency_level] !== rank[b.urgency_level]) {
-          return rank[a.urgency_level] - rank[b.urgency_level];
-        }
-        return a.token_number - b.token_number;
-      });
+    // 1. TRY SUPABASE FIRST
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*, patients(*)')
+        .eq('appointment_date', today)
+        .in('status', ['Checked-In', 'In-Consultation'])
+        .order('token_number', { ascending: true });
 
-      setQueue(sorted);
-      if (!selectedPatient && sorted.length > 0) {
-        setSelectedPatient(sorted[0]);
+      if (!error && data && data.length > 0) {
+        sortedPatients = data as unknown as WaitingPatient[];
       }
+    } catch (e) {
+      console.log('Supabase fetch failed, using local store');
+    }
+
+    // 2. FALLBACK TO LOCAL STORAGE (dh_patients & arogya_live_queue) IF SUPABASE IS EMPTY/OFFLINE
+    if (sortedPatients.length === 0) {
+      const localItems: QueueItem[] = getQueue();
+      const filteredLocal = localItems.filter(
+        (item) =>
+          item.status === 'Checked-In' ||
+          item.status === 'In-Cabin' ||
+          item.status === 'In Consultation'
+      );
+
+      sortedPatients = filteredLocal.map((item) => ({
+        id: item.id,
+        patient_id: item.id,
+        token_number: item.tokenNumber,
+        urgency_level: (item.urgency as any) || 'Normal',
+        status: item.status,
+        symptoms: 'Regular OPD Consultation',
+        patients: {
+          full_name: item.patientName,
+          phone: item.mobile,
+          gender: item.gender || 'Other',
+          date_of_birth: '2000-01-01',
+          allergies: 'None'
+        }
+      }));
+    }
+
+    // Sort by Urgency Rank then Token Number
+    const rank: Record<string, number> = { Emergency: 1, Priority: 2, Normal: 3, Standard: 3 };
+    sortedPatients.sort((a, b) => {
+      const rankA = rank[a.urgency_level] || 3;
+      const rankB = rank[b.urgency_level] || 3;
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+      return a.token_number - b.token_number;
+    });
+
+    setQueue(sortedPatients);
+
+    if (!selectedPatient && sortedPatients.length > 0) {
+      setSelectedPatient(sortedPatients[0]);
     }
   };
 
   useEffect(() => {
     fetchQueue();
+
+    const interval = setInterval(fetchQueue, 1000);
+    window.addEventListener('storage', fetchQueue);
+    window.addEventListener('queue_updated', fetchQueue);
 
     const channel = supabase
       .channel('doctor_queue_realtime')
@@ -183,6 +228,9 @@ export default function DoctorWorkspacePage() {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', fetchQueue);
+      window.removeEventListener('queue_updated', fetchQueue);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -214,10 +262,17 @@ export default function DoctorWorkspacePage() {
     setSelectedPatient(patient);
     setCompletedRxId(null);
 
-    await supabase
-      .from('appointments')
-      .update({ status: 'In-Consultation' })
-      .eq('id', patient.id);
+    // Update both local storage & Supabase
+    updateTokenStatus(patient.token_number, 'In Consultation');
+
+    try {
+      await supabase
+        .from('appointments')
+        .update({ status: 'In-Consultation' })
+        .eq('id', patient.id);
+    } catch (e) {
+      console.log('Local consultation status updated');
+    }
 
     fetchQueue();
   };
@@ -227,28 +282,32 @@ export default function DoctorWorkspacePage() {
     setHistoryLoading(true);
     setShowHistoryModal(true);
 
-    const { data, error } = await supabase
-      .from('consultations')
-      .select(`
-        id,
-        created_at,
-        diagnosis,
-        symptoms,
-        prescriptions (
+    try {
+      const { data, error } = await supabase
+        .from('consultations')
+        .select(`
           id,
-          prescription_items (
-            medicine_name,
-            dosage,
-            frequency,
-            duration
+          created_at,
+          diagnosis,
+          symptoms,
+          prescriptions (
+            id,
+            prescription_items (
+              medicine_name,
+              dosage,
+              frequency,
+              duration
+            )
           )
-        )
-      `)
-      .eq('patient_id', selectedPatient.patient_id)
-      .order('created_at', { ascending: false });
+        `)
+        .eq('patient_id', selectedPatient.patient_id)
+        .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      setPastConsultations(data as unknown as PastConsultation[]);
+      if (!error && data) {
+        setPastConsultations(data as unknown as PastConsultation[]);
+      }
+    } catch (e) {
+      setPastConsultations([]);
     }
     setHistoryLoading(false);
   };
@@ -264,56 +323,68 @@ export default function DoctorWorkspacePage() {
     setLoading(true);
 
     try {
-      const { data: consultData, error: consultError } = await supabase
-        .from('consultations')
-        .insert([
-          {
-            appointment_id: selectedPatient.id,
-            patient_id: selectedPatient.patient_id,
-            symptoms: clinicalSymptoms || 'General Consultation',
-            diagnosis: clinicalDiagnosis.trim(),
-            notes: 'Completed in Dhanwantri Doctor Desk'
+      let generatedRxId = `rx-${Date.now()}`;
+
+      try {
+        const { data: consultData, error: consultError } = await supabase
+          .from('consultations')
+          .insert([
+            {
+              appointment_id: selectedPatient.id,
+              patient_id: selectedPatient.patient_id,
+              symptoms: clinicalSymptoms || 'General Consultation',
+              diagnosis: clinicalDiagnosis.trim(),
+              notes: 'Completed in Dhanwantri Doctor Desk'
+            }
+          ])
+          .select();
+
+        if (!consultError && consultData && consultData.length > 0) {
+          const consultationId = consultData[0].id;
+          const { data: rxData, error: rxError } = await supabase
+            .from('prescriptions')
+            .insert([
+              {
+                consultation_id: consultationId,
+                patient_id: selectedPatient.patient_id,
+                issue_date: new Date().toISOString().split('T')[0]
+              }
+            ])
+            .select();
+
+          if (!rxError && rxData && rxData.length > 0) {
+            generatedRxId = rxData[0].id;
+            const validMedicines = medicines.filter(m => m.name.trim() !== '');
+            if (validMedicines.length > 0) {
+              const itemsToInsert = validMedicines.map(m => ({
+                prescription_id: generatedRxId,
+                medicine_name: m.name.trim(),
+                dosage: m.dosage,
+                frequency: m.frequency,
+                duration: m.duration,
+                instructions: m.instructions
+              }));
+              await supabase.from('prescription_items').insert(itemsToInsert);
+            }
           }
-        ])
-        .select();
-
-      if (consultError) throw consultError;
-      const consultationId = consultData[0].id;
-
-      const { data: rxData, error: rxError } = await supabase
-        .from('prescriptions')
-        .insert([
-          {
-            consultation_id: consultationId,
-            patient_id: selectedPatient.patient_id,
-            issue_date: new Date().toISOString().split('T')[0]
-          }
-        ])
-        .select();
-
-      if (rxError) throw rxError;
-      const prescriptionId = rxData[0].id;
-
-      const validMedicines = medicines.filter(m => m.name.trim() !== '');
-      if (validMedicines.length > 0 && prescriptionId) {
-        const itemsToInsert = validMedicines.map(m => ({
-          prescription_id: prescriptionId,
-          medicine_name: m.name.trim(),
-          dosage: m.dosage,
-          frequency: m.frequency,
-          duration: m.duration,
-          instructions: m.instructions
-        }));
-
-        await supabase.from('prescription_items').insert(itemsToInsert);
+        }
+      } catch (err) {
+        console.log('Completed consultation locally');
       }
 
-      await supabase
-        .from('appointments')
-        .update({ status: 'Completed' })
-        .eq('id', selectedPatient.id);
+      // Mark completed in local queue store
+      updateTokenStatus(selectedPatient.token_number, 'Completed');
 
-      setCompletedRxId(prescriptionId);
+      try {
+        await supabase
+          .from('appointments')
+          .update({ status: 'Completed' })
+          .eq('id', selectedPatient.id);
+      } catch (e) {
+        // Ignore offline error
+      }
+
+      setCompletedRxId(generatedRxId);
       setCompletedPatientName(selectedPatient.patients?.full_name || 'Patient');
       setCompletedTokenNumber(selectedPatient.token_number);
       setClinicalDiagnosis('');

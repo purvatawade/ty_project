@@ -25,26 +25,26 @@ export default function Navbar() {
     router.replace('/login');
   };
 
-  // Hide Navbar completely on the login portal page for a clean look
   if (pathname === '/login') {
     return null;
   }
 
-  // Doctor / Admin see all console views; Patient sees only Patient Registration
-  const navItems = [
-    { name: 'Patient Registration', href: '/', icon: '👤+' },
-    ...(userRole === 'doctor'
+  // Doctor/Admin see full console; Patient sees Appointment Booking & Queue Tracker
+  const navItems =
+    userRole === 'doctor'
       ? [
+          { name: 'Book Appointment', href: '/', icon: '📅' },
           { name: 'Reception Console', href: '/reception', icon: '📋' },
           { name: 'Doctor Desk', href: '/doctor', icon: '🩺' },
-          { name: 'OPD Analytics', href: '/analytics', icon: '📊' },
+          { name: 'Analytics', href: '/analytics', icon: '📊' },
         ]
-      : []),
-  ];
+      : [
+          { name: 'Book Appointment', href: '/', icon: '📅' },
+          { name: 'Live Queue Tracker', href: '/queue', icon: '⏱️' },
+        ];
 
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200/80 shadow-sm sticky top-0 z-50">
-      {/* Brand Logo */}
       <div className="flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#005f42] text-white font-bold shadow-md transition-transform group-hover:scale-105">
@@ -61,7 +61,6 @@ export default function Navbar() {
         </Link>
       </div>
 
-      {/* Navigation Links */}
       <nav className="flex items-center gap-6">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
@@ -86,7 +85,6 @@ export default function Navbar() {
           );
         })}
 
-        {/* Dark Red Logout Button with White Text (No Icon) */}
         {isLoggedIn && (
           <button
             onClick={handleLogout}
